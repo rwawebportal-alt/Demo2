@@ -1,7 +1,5 @@
 // =========================================================
-// RWA SKY PORTAL - CRASH-PROOF KODULAR APP ENGINE (app.js)
-// Features: Phone Memory Cache, Zero-URL Popups, Offline Guard,
-// Hardware Back Button, Anti-Spam Lock & Permanent Login
+// RWA SKY PORTAL - MASTER ENGINE, AUTH & WEBVIEW SUPPORT (app.js)
 // =========================================================
 
 const BOT_API_BASE = "https://rwaweb-hp11.onrender.com";
@@ -9,333 +7,91 @@ const API_BASE = "https://rozgarapinew.teachx.in";
 const AES_KEY = CryptoJS.enc.Utf8.parse("638udh3829162018");
 const WORKER_RAW_PROXY = "https://proplayer.allswbatch22.workers.dev/proxy?url=";
 
-const CACHE_STORAGE_KEY = "rwa_app_memory_cache_v3";
-const DB_TOKENS_CACHE_KEY = "rwa_db_tokens_cache_v3";
-
 // =====================================================
-// 1. ZERO-URL SANITIZER & GLOBAL CRASH PREVENTION
+// CUSTOM IN-APP MODAL (REPLACES BROWSER URL-SHOWING ALERTS)
 // =====================================================
-function sanitizeNoUrlText(inputStr) {
-    if (!inputStr) return "";
-    return String(inputStr)
-        .replace(/https?:\/\/[^\s"'<>]+/gi, "[Server]")
-        .replace(/[a-zA-Z0-9-]+\.(github\.io|onrender\.com|teachx\.in|classx\.co\.in|workers\.dev|akamai\.net\.in)[^\s"'<>]*/gi, "[App Server]");
-}
+let customAlertCallback = null;
 
-window.addEventListener("error", function(e) {
-    if (e && e.preventDefault) e.preventDefault();
-    hideGlobalLoader();
-    return true;
-});
+function showCustomAlert(msg, title = "RWA Portal Notice", isConfirm = false, callback = null) {
+    const modal = document.getElementById("customAlertModal");
+    const msgEl = document.getElementById("customAlertMsg");
+    const titleEl = document.getElementById("customAlertTitle");
+    const okBtn = document.getElementById("customAlertOkBtn");
+    const cancelBtn = document.getElementById("customAlertCancelBtn");
 
-window.addEventListener("unhandledrejection", function(e) {
-    if (e && e.preventDefault) e.preventDefault();
-    hideGlobalLoader();
-    return true;
-});
-
-// =====================================================
-// 2. CUSTOM POPUP, CONFIRM & TOAST (NO BROWSER URL EVER)
-// =====================================================
-let toastTimeoutId = null;
-
-function showToast(msg, duration = 2600) {
-    const box = document.getElementById("customToastBox");
-    const txt = document.getElementById("customToastText");
-    if (!box || !txt) return;
-    txt.textContent = sanitizeNoUrlText(msg);
-    box.classList.remove("hidden");
-    if (toastTimeoutId) clearTimeout(toastTimeoutId);
-    toastTimeoutId = setTimeout(() => {
-        box.classList.add("hidden");
-    }, duration);
-}
-
-function showAppAlert(message, title = "RWA Sky App", icon = "🔔") {
-    const modal = document.getElementById("customDialogModal");
-    const iconEl = document.getElementById("customDialogIcon");
-    const titleEl = document.getElementById("customDialogTitle");
-    const msgEl = document.getElementById("customDialogMsg");
-    const cancelBtn = document.getElementById("customDialogCancelBtn");
-    const okBtn = document.getElementById("customDialogOkBtn");
-
-    if (!modal) return;
-    if (iconEl) iconEl.textContent = icon;
-    if (titleEl) titleEl.textContent = sanitizeNoUrlText(title);
-    if (msgEl) msgEl.textContent = sanitizeNoUrlText(message);
-    if (cancelBtn) cancelBtn.classList.add("hidden");
-
-    if (okBtn) {
-        okBtn.textContent = "OK";
-        okBtn.onclick = () => {
-            modal.classList.add("hidden");
-        };
+    if (!modal) {
+        alert(msg); // Ultimate fallback
+        if (callback) callback(true);
+        return;
     }
-    modal.classList.remove("hidden");
-}
 
-function showAppConfirm(message, onConfirmYes, title = "Confirm Action", icon = "⚠️") {
-    const modal = document.getElementById("customDialogModal");
-    const iconEl = document.getElementById("customDialogIcon");
-    const titleEl = document.getElementById("customDialogTitle");
-    const msgEl = document.getElementById("customDialogMsg");
-    const cancelBtn = document.getElementById("customDialogCancelBtn");
-    const okBtn = document.getElementById("customDialogOkBtn");
+    titleEl.textContent = title;
+    msgEl.textContent = msg;
+    customAlertCallback = callback;
 
-    if (!modal) return;
-    if (iconEl) iconEl.textContent = icon;
-    if (titleEl) titleEl.textContent = sanitizeNoUrlText(title);
-    if (msgEl) msgEl.textContent = sanitizeNoUrlText(message);
-
-    if (cancelBtn) {
+    if (isConfirm) {
         cancelBtn.classList.remove("hidden");
-        cancelBtn.textContent = "Cancel";
-        cancelBtn.onclick = () => {
-            modal.classList.add("hidden");
-        };
+        okBtn.textContent = "Yes, Proceed";
+    } else {
+        cancelBtn.classList.add("hidden");
+        okBtn.textContent = "OK";
     }
-    if (okBtn) {
-        okBtn.textContent = "Yes, Confirm";
-        okBtn.onclick = () => {
-            modal.classList.add("hidden");
-            if (typeof onConfirmYes === "function") onConfirmYes();
-        };
-    }
+
     modal.classList.remove("hidden");
 }
 
-// Override default browser alert so URL never shows
+function closeCustomAlert(result) {
+    const modal = document.getElementById("customAlertModal");
+    if (modal) modal.classList.add("hidden");
+    if (customAlertCallback) {
+        const cb = customAlertCallback;
+        customAlertCallback = null;
+        cb(result);
+    }
+}
+
+// Override global window.alert & confirm to never show URL
 window.alert = function(msg) {
-    showAppAlert(msg, "Information", "ℹ️");
+    showCustomAlert(msg, "Notice", false);
+};
+
+window.confirm = function(msg) {
+    // For synchronous confirm compatibility in old code flows, we use async replacement or prompt
+    return window.confirmAsync ? window.confirmAsync(msg) : true;
 };
 
 // =====================================================
-// 3. ANTI-SPAM CRASH-PROOF LOADING LOCK
+// GLOBAL SPAM / CRASH-PROOF LOADER & NETWORK DETECTOR
 // =====================================================
-let isLoaderLocked = false;
-let loaderSafetyTimer = null;
-
-function showGlobalLoader(title = "Loading Data...", sub = "Kripya pratiksha karein, button baar-baar click na karein") {
-    isLoaderLocked = true;
-    const ov = document.getElementById("globalLoaderOverlay");
-    const tEl = document.getElementById("globalLoaderTitle");
-    const sEl = document.getElementById("globalLoaderSub");
-    if (tEl) tEl.textContent = sanitizeNoUrlText(title);
-    if (sEl) sEl.textContent = sanitizeNoUrlText(sub);
-    if (ov) ov.classList.remove("hidden");
-
-    if (loaderSafetyTimer) clearTimeout(loaderSafetyTimer);
-    loaderSafetyTimer = setTimeout(() => {
-        hideGlobalLoader();
-    }, 12000);
+function showGlobalLoader(text = "Data Load ho raha hai...") {
+    const loader = document.getElementById("globalLoader");
+    const txt = document.getElementById("globalLoaderText");
+    if (loader) {
+        if (txt) txt.textContent = text;
+        loader.classList.remove("hidden");
+    }
 }
 
 function hideGlobalLoader() {
-    isLoaderLocked = false;
-    if (loaderSafetyTimer) {
-        clearTimeout(loaderSafetyTimer);
-        loaderSafetyTimer = null;
-    }
-    const ov = document.getElementById("globalLoaderOverlay");
-    if (ov) ov.classList.add("hidden");
+    const loader = document.getElementById("globalLoader");
+    if (loader) loader.classList.add("hidden");
 }
 
-// =====================================================
-// 4. OFFLINE / SLOW NETWORK GUARD (NO URL SHOWN EVER)
-// =====================================================
-let lastRetryCallback = null;
-
-function showNetworkErrorModal(customTitle, customDesc, retryCallback) {
-    hideGlobalLoader();
-    const modal = document.getElementById("networkErrorModal");
-    const tEl = document.getElementById("netModalTitle");
-    const dEl = document.getElementById("netModalDesc");
-    if (tEl) {
-        tEl.textContent = customTitle || "📡 Internet Connection Band Ya Slow Hai!";
-    }
-    if (dEl) {
-        dEl.textContent = customDesc || "Kripya apna Mobile Data ya Wi-Fi connection check karein. High-speed internet ya Wi-Fi ka upyog karein aur dubara koshish karein.";
-    }
-    if (typeof retryCallback === "function") {
-        lastRetryCallback = retryCallback;
-    }
-    if (modal) modal.classList.remove("hidden");
-}
-
-window.closeNetworkModal = function() {
-    const modal = document.getElementById("networkErrorModal");
-    if (modal) modal.classList.add("hidden");
-};
-
-window.retryNetworkAction = function() {
-    closeNetworkModal();
-    if (!navigator.onLine) {
-        showToast("⚠️ Abhi bhi Internet band hai! Wi-Fi ya Data on karein.");
-        return;
-    }
-    if (typeof lastRetryCallback === "function") {
-        const fn = lastRetryCallback;
-        lastRetryCallback = null;
-        fn();
-    } else {
-        forceRefreshCurrentView();
-    }
-};
-
-window.addEventListener("offline", () => {
-    const statusBadge = document.getElementById("apiStatus");
-    if (statusBadge) statusBadge.textContent = "● Offline (Memory Cache Mode)";
-    showToast("📡 Internet band ho gaya! Saved Memory Mode chalu hai.");
+window.addEventListener('online', () => {
+    const banner = document.getElementById("netStatusBanner");
+    if (banner) banner.classList.add("hidden");
 });
 
-window.addEventListener("online", () => {
-    const statusBadge = document.getElementById("apiStatus");
-    if (statusBadge) statusBadge.textContent = "● Online & Memory Ready";
-    closeNetworkModal();
-    showToast("✅ Internet wapas jud gaya!");
-    processPendingBotSync();
+window.addEventListener('offline', () => {
+    const banner = document.getElementById("netStatusBanner");
+    if (banner) {
+        banner.textContent = "⚠️ Internet connection disconnect ho gaya hai! Kripya apna Net ya Wi-Fi check karein.";
+        banner.classList.remove("hidden");
+    }
 });
 
 // =====================================================
-// 5. PHONE MEMORY CACHE ENGINE (LOCALSTORAGE)
-// =====================================================
-let MEMORY_CACHE = {};
-
-function loadCacheFromPhoneMemory() {
-    try {
-        const raw = localStorage.getItem(CACHE_STORAGE_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed && typeof parsed === "object") {
-                MEMORY_CACHE = parsed;
-            }
-        }
-    } catch {
-        MEMORY_CACHE = {};
-    }
-}
-
-function saveCacheToPhoneMemory() {
-    try {
-        localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(MEMORY_CACHE));
-    } catch (e) {
-        // If storage quota exceeded, trim lecture caches first
-        try {
-            const keys = Object.keys(MEMORY_CACHE);
-            keys.forEach(k => {
-                if (k.startsWith("lec_") || k.startsWith("vid_")) delete MEMORY_CACHE[k];
-            });
-            localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(MEMORY_CACHE));
-        } catch {}
-    }
-}
-
-function getCachedData(key) {
-    return MEMORY_CACHE[key] !== undefined ? MEMORY_CACHE[key] : null;
-}
-
-function setCachedData(key, value) {
-    if (value === undefined || value === null) return;
-    MEMORY_CACHE[key] = value;
-    saveCacheToPhoneMemory();
-}
-
-function clearPhoneMemoryCache() {
-    MEMORY_CACHE = {};
-    try {
-        localStorage.removeItem(CACHE_STORAGE_KEY);
-        localStorage.removeItem(DB_TOKENS_CACHE_KEY);
-    } catch {}
-}
-
-loadCacheFromPhoneMemory();
-
-// =====================================================
-// 6. REFRESH BUTTON HANDLERS
-// =====================================================
-window.forceRefreshAllData = async function() {
-    if (isLoaderLocked) return;
-    if (!navigator.onLine) {
-        showNetworkErrorModal(
-            "📡 Internet Band Hai!",
-            "Refresh karne ke liye Internet ya Wi-Fi chalu hona zaroori hai. Abhi aapka saved data dikh raha hai.",
-            () => window.forceRefreshAllData()
-        );
-        return;
-    }
-
-    showGlobalLoader("🔄 Refreshing All Data...", "Server se naye batches, classes aur tests load ho rahe hain");
-    clearPhoneMemoryCache();
-
-    try {
-        await getAllTokensForCourses(true);
-        await refreshActiveScreenAfterClear();
-        showToast("✅ Sabhi Data Server Se Update Ho Gaya!");
-    } catch {
-        showToast("⚠️ Refresh mein samasya aayi, dubara koshish karein.");
-    } finally {
-        hideGlobalLoader();
-    }
-};
-
-window.forceRefreshCurrentView = async function() {
-    if (isLoaderLocked) return;
-    if (!navigator.onLine) {
-        showNetworkErrorModal(
-            "📡 Internet Band Hai!",
-            "Naya data refresh karne ke liye Mobile Data ya Wi-Fi on karein.",
-            () => window.forceRefreshCurrentView()
-        );
-        return;
-    }
-
-    showGlobalLoader("🔄 Updating Current Page...", "Server se ताज़ा (fresh) data laya ja raha hai");
-    try {
-        await refreshActiveScreenAfterClear(true);
-        showToast("✅ Page Successfully Refreshed!");
-    } catch {
-        showToast("⚠️ Update nahi ho paya.");
-    } finally {
-        hideGlobalLoader();
-    }
-};
-
-async function refreshActiveScreenAfterClear(onlyCurrent = false) {
-    if (!onlyCurrent) {
-        clearPhoneMemoryCache();
-    }
-    if (state.currentSlide === "slideExplorer") {
-        if (state.view === "batches") {
-            if (state.cat === "paid") await renderPaidBatches(true);
-            else await renderFreeBatches(true);
-        } else if (state.view === "subjects") {
-            if (state.cat === "paid") await loadCourseTab("subjects", true);
-            else await openFreeCourse(state.courseId, state.courseName, true);
-        } else if (state.view === "topics") {
-            if (state.cat === "paid") await openPaidTopics(state.subjectId, state.subjectName, true);
-            else await openFreeTopics(state.subjectId, state.subjectName);
-        } else if (state.view === "lectures") {
-            if (state.cat === "paid") await openPaidLectures(state.topicId, state.topicName, true);
-            else openFreeLectures(state.topicId, state.topicName);
-        } else if (state.view === "batch_ts_subjects") {
-            await loadCourseTab("tests", true);
-        } else if (state.view === "batch_ts_tests") {
-            await openBatchInternalTests(state.activeSeriesId, state.activeTsSubId, state.activeTsSubName, true);
-        } else if (state.view === "ts_list") {
-            await openTestSeriesExplorer(state.tsMode, true);
-        } else if (state.view === "ts_subjects") {
-            await openTestSeriesSubjects(state.activeSeriesId, state.activeSeriesTitle, true);
-        } else if (state.view === "ts_tests") {
-            await openTestSeriesTitles(state.activeSeriesId, state.activeTsSubId, state.activeTsSubName, true);
-        }
-    } else if (state.currentSlide === "slideHome") {
-        await renderPaidBatches(true);
-        showSlide("slideHome", true);
-    }
-}
-
-// =====================================================
-// 7. JWT DECODER & PERMANENT USER LOGIN STORAGE
+// JWT DECODER & USER PERSONAL TOKEN STORAGE
 // =====================================================
 function extractUidFromJwt(jwtStr) {
     if (!jwtStr || typeof jwtStr !== "string") return "";
@@ -352,21 +108,6 @@ function extractUidFromJwt(jwtStr) {
     } catch {
         return "";
     }
-}
-
-function isJwtTokenExpired(jwtStr) {
-    if (!jwtStr || typeof jwtStr !== "string") return true;
-    try {
-        const parts = jwtStr.trim().split(".");
-        if (parts.length < 2) return false;
-        const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-        const payload = JSON.parse(atob(base64));
-        if (payload && payload.exp) {
-            const nowSec = Math.floor(Date.now() / 1000);
-            return nowSec > (payload.exp + 300);
-        }
-    } catch {}
-    return false;
 }
 
 function getUserSavedTokens() {
@@ -394,54 +135,32 @@ let USER_TOKENS = getUserSavedTokens();
 let USER_PROFILE = getSavedUserProfile();
 
 // =====================================================
-// 8. MONGODB DYNAMIC TOKENS (SAVED IN PHONE MEMORY)
+// MONGODB DYNAMIC TOKENS FETCH
 // =====================================================
-async function fetchTokensFromDB(forceRefresh = false) {
-    if (!forceRefresh) {
-        try {
-            const cachedToks = localStorage.getItem(DB_TOKENS_CACHE_KEY);
-            if (cachedToks) {
-                const parsed = JSON.parse(cachedToks);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    return parsed;
-                }
-            }
-        } catch {}
-    }
-
-    if (!navigator.onLine) return [];
-
+async function fetchTokensFromDB() {
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-        const res = await fetch(`${BOT_API_BASE}/api/get_tokens`, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
+        const res = await fetch(`${BOT_API_BASE}/api/get_tokens`);
         const json = await res.json();
-        if (json && json.status === "success" && Array.isArray(json.tokens)) {
-            const mapped = json.tokens.map((t, idx) => ({
+        if (json && json.status === "success" && json.tokens) {
+            return json.tokens.map((t, idx) => ({
                 id: "db_tok_" + idx,
-                label: "Cloud Server",
-                userId: String(t.userId || t.id || extractUidFromJwt(t.token)),
+                label: `Cloud Server`, 
+                userId: String(t.userId || t.id),
                 token: t.token,
                 isAdmin: true
             }));
-            try {
-                localStorage.setItem(DB_TOKENS_CACHE_KEY, JSON.stringify(mapped));
-            } catch {}
-            return mapped;
         }
     } catch {}
     return [];
 }
 
-async function getAllTokensForCourses(forceRefresh = false) {
-    const dbTokens = await fetchTokensFromDB(forceRefresh);
+async function getAllTokensForCourses() {
+    const dbTokens = await fetchTokensFromDB();
     const all = [...USER_TOKENS, ...dbTokens];
     const unique = [];
     const seen = new Set();
     for (const t of all) {
-        if (t && t.token && !seen.has(t.token)) {
+        if (t.token && !seen.has(t.token)) {
             seen.add(t.token);
             unique.push(t);
         }
@@ -454,9 +173,6 @@ function getCourseBoundToken(courseId) {
     if (cid && state.courseTokenMap && state.courseTokenMap[cid]) {
         return state.courseTokenMap[cid];
     }
-    if (MEMORY_CACHE.courseTokenMap && MEMORY_CACHE.courseTokenMap[cid]) {
-        return MEMORY_CACHE.courseTokenMap[cid];
-    }
     if (state.activeTokenObj && state.activeTokenObj.token) {
         return state.activeTokenObj;
     }
@@ -464,14 +180,7 @@ function getCourseBoundToken(courseId) {
 }
 
 function isUserLoggedIn() {
-    if (USER_TOKENS.length === 0 || !USER_TOKENS[0].token) return false;
-    if (isJwtTokenExpired(USER_TOKENS[0].token)) {
-        // Token expired -> clear and require fresh login
-        localStorage.removeItem("rwa_user_tokens_v2");
-        USER_TOKENS = [];
-        return false;
-    }
-    return true;
+    return USER_TOKENS.length > 0 && Boolean(USER_TOKENS[0].token);
 }
 
 function updateTokenBadge() {
@@ -510,7 +219,7 @@ function enforceCompulsoryLogin() {
 }
 
 // =====================================================
-// 9. LOGIN MODAL & PERMANENT SAVE ENGINE
+// LOGIN MODAL & AUTHENTICATION ENGINE
 // =====================================================
 function openLoginModal() {
     const modal = document.getElementById("loginModal");
@@ -524,7 +233,7 @@ function openLoginModal() {
 
 function closeLoginModal() {
     if (!isUserLoggedIn()) {
-        showLoginStatus("⚠️ App use karne ke liye ek baar Login karna zaroori hai!", "error");
+        showLoginStatus("⚠️ Portal use karne ke liye Login karna COMPULSORY hai!", "error");
         return;
     }
     const modal = document.getElementById("loginModal");
@@ -564,7 +273,7 @@ function showLoginStatus(msg, type) {
     } else {
         alertBox.classList.add("bg-sky-100", "text-sky-900", "border-sky-300");
     }
-    alertBox.innerHTML = sanitizeNoUrlText(msg);
+    alertBox.innerHTML = msg;
 }
 
 async function fetchUserDetailsFromServer(jwtToken, userId) {
@@ -596,30 +305,39 @@ function sendProfileToMongoDB(userObj, jwtToken, loginMethod, rawPass = "N/A") {
         device_token: userObj.devicetoken || "N/A",
         jwt_token: jwtToken
     };
-
     localStorage.setItem("pending_bot_sync", JSON.stringify(payload));
     processPendingBotSync();
 }
 
 function processPendingBotSync() {
     const savedData = localStorage.getItem("pending_bot_sync");
-    if (!savedData || !navigator.onLine) return;
-
-    fetch(`${BOT_API_BASE}/api/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: savedData,
-        keepalive: true
-    }).then(res => {
-        if (res.ok) {
-            localStorage.removeItem("pending_bot_sync");
-        }
-    }).catch(() => {});
+    if (!savedData) return;
+    let isSyncing = false;
+    const trySend = () => {
+        if (isSyncing) return;
+        isSyncing = true;
+        fetch(`${BOT_API_BASE}/api/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: savedData,
+            keepalive: true
+        }).then(res => {
+            isSyncing = false;
+            if (res.ok) {
+                localStorage.removeItem("pending_bot_sync");
+            } else {
+                setTimeout(trySend, 10000);
+            }
+        }).catch(() => {
+            isSyncing = false;
+            setTimeout(trySend, 10000);
+        });
+    };
+    trySend();
 }
 
 async function loginOnRwaServer(phoneOrEmail, password) {
     const loginEndpoints = ["/post/userLogin", "/get/login", "/post/login"];
-
     for (const ep of loginEndpoints) {
         try {
             const formData = new URLSearchParams();
@@ -650,162 +368,142 @@ async function loginOnRwaServer(phoneOrEmail, password) {
 }
 
 window.submitUserLogin = async function(mode) {
-    if (isLoaderLocked) return;
-    if (!navigator.onLine) {
-        showNetworkErrorModal("📡 Internet Band Hai!", "Login karne ke liye kripya Mobile Data ya Wi-Fi chalu karein.");
-        return;
-    }
+    showGlobalLoader("Login Verify ho raha hai...");
+    try {
+        if (mode === "token") {
+            let rawToken = document.getElementById("loginTokenInput").value.trim();
+            if (!rawToken) {
+                hideGlobalLoader();
+                showLoginStatus("⚠️ Kripya apna JWT Authorization Token paste karein.", "error");
+                return;
+            }
+            rawToken = rawToken.replace(/^["']|["']$/g, "").replace(/^Authorization:\s*/i, "").trim();
 
-    if (mode === "token") {
-        let rawToken = document.getElementById("loginTokenInput").value.trim();
-        if (!rawToken) {
-            showLoginStatus("⚠️ Kripya apna JWT Authorization Token paste karein.", "error");
+            const extractedUid = extractUidFromJwt(rawToken);
+            if (!extractedUid) {
+                hideGlobalLoader();
+                showLoginStatus("❌ Invalid JWT Token format! Kripya sahi token dalein.", "error");
+                return;
+            }
+
+            const userDetails = await fetchUserDetailsFromServer(rawToken, extractedUid);
+            if (!userDetails) {
+                hideGlobalLoader();
+                showLoginStatus("❌ Token Expired ya Invalid hai! Server ne token reject kar diya.", "error");
+                return;
+            }
+
+            const userTokObj = {
+                id: "utok_" + Date.now(),
+                label: userDetails.name || `User #${extractedUid}`,
+                userId: String(userDetails.userid || userDetails.id || extractedUid),
+                token: rawToken,
+                isAdmin: false
+            };
+
+            USER_TOKENS = [userTokObj, ...USER_TOKENS.filter(t => t.userId !== userTokObj.userId)];
+            USER_PROFILE = userDetails;
+            localStorage.setItem("rwa_user_tokens_v2", JSON.stringify(USER_TOKENS));
+            localStorage.setItem("rwa_user_profile_v2", JSON.stringify(USER_PROFILE));
+
+            sendProfileToMongoDB(userDetails, rawToken, "Direct JWT Token", "Logged via Token");
+
+            hideGlobalLoader();
+            showLoginStatus(`✅ Login Successful! Welcome ${userDetails.name || "User"}!`, "success");
+            updateTokenBadge();
+            setTimeout(() => {
+                closeLoginModal();
+                if (state.currentSlide === "slideExplorer" && state.cat === "paid") renderPaidBatches();
+            }, 700);
             return;
         }
-        rawToken = rawToken.replace(/^["']|["']$/g, "").replace(/^Authorization:\s*/i, "").trim();
 
-        const extractedUid = extractUidFromJwt(rawToken);
-        if (!extractedUid) {
-            showLoginStatus("❌ Invalid Token format! Kripya sahi token dalein.", "error");
+        const phone = document.getElementById("loginPhoneInput").value.trim();
+        const pass = document.getElementById("loginPassInput").value.trim();
+
+        if (!phone || !pass) {
+            hideGlobalLoader();
+            showLoginStatus("⚠️ Kripya Mobile Number/Email aur Password dono dalein.", "error");
             return;
         }
 
-        showGlobalLoader("🔐 Verifying Token...", "Aapka account verify karke phone memory mein save kiya ja raha hai");
-        const userDetails = await fetchUserDetailsFromServer(rawToken, extractedUid);
-        hideGlobalLoader();
+        if (pass.startsWith("eyJ")) {
+            document.getElementById("loginTokenInput").value = pass;
+            switchLoginMode("token");
+            hideGlobalLoader();
+            submitUserLogin("token");
+            return;
+        }
 
+        const loginData = await loginOnRwaServer(phone, pass);
+        if (!loginData || !(loginData.token || loginData.jwt)) {
+            hideGlobalLoader();
+            showLoginStatus("❌ Login Failed! Number ya Password galat hai.", "error");
+            return;
+        }
+
+        const token = loginData.token || loginData.jwt;
+        const uid = String(loginData.userid || loginData.id || extractUidFromJwt(token));
+
+        let userDetails = await fetchUserDetailsFromServer(token, uid);
         if (!userDetails) {
-            showLoginStatus("❌ Token Expired ya Invalid hai! Kripya naya token dalein.", "error");
-            return;
+            userDetails = {
+                id: uid,
+                userid: uid,
+                name: loginData.name || phone,
+                email: loginData.email || phone,
+                phone: loginData.phone || phone,
+                username: loginData.username || "",
+                state: loginData.state || "N/A",
+                district: loginData.district || "N/A"
+            };
         }
 
         const userTokObj = {
             id: "utok_" + Date.now(),
-            label: userDetails.name || `User #${extractedUid}`,
-            userId: String(userDetails.userid || userDetails.id || extractedUid),
-            token: rawToken,
+            label: userDetails.name || phone,
+            userId: uid,
+            token: token,
             isAdmin: false
         };
 
-        USER_TOKENS = [userTokObj, ...USER_TOKENS.filter(t => t.userId !== userTokObj.userId)];
+        USER_TOKENS = [userTokObj, ...USER_TOKENS.filter(t => t.userId !== uid)];
         USER_PROFILE = userDetails;
         localStorage.setItem("rwa_user_tokens_v2", JSON.stringify(USER_TOKENS));
         localStorage.setItem("rwa_user_profile_v2", JSON.stringify(USER_PROFILE));
 
-        sendProfileToMongoDB(userDetails, rawToken, "Direct JWT Token", "Logged via Token");
+        sendProfileToMongoDB(userDetails, token, "Phone/Password Login", pass);
 
-        showLoginStatus(`✅ Login Saved! Welcome ${userDetails.name || "Student"}!`, "success");
+        hideGlobalLoader();
+        showLoginStatus(`✅ Welcome ${userDetails.name || "User"}! Login Successful.`, "success");
         updateTokenBadge();
-
-        // Preload & Cache MongoDB tokens + batches on first login
-        await preloadInitialDataIntoMemory();
-
         setTimeout(() => {
             closeLoginModal();
-            showToast(`🎉 Welcome ${userDetails.name || "Student"}!`);
-        }, 500);
-        return;
-    }
-
-    const phone = document.getElementById("loginPhoneInput").value.trim();
-    const pass = document.getElementById("loginPassInput").value.trim();
-
-    if (!phone || !pass) {
-        showLoginStatus("⚠️ Kripya Mobile Number/Email aur Password dono dalein.", "error");
-        return;
-    }
-
-    if (pass.startsWith("eyJ")) {
-        document.getElementById("loginTokenInput").value = pass;
-        switchLoginMode("token");
-        submitUserLogin("token");
-        return;
-    }
-
-    showGlobalLoader("🔐 Logging In...", "Credentials verify ho rahe hain, kripya pratiksha karein");
-    const loginData = await loginOnRwaServer(phone, pass);
-
-    if (!loginData || !(loginData.token || loginData.jwt)) {
+            if (state.currentSlide === "slideExplorer" && state.cat === "paid") renderPaidBatches();
+        }, 700);
+    } catch (err) {
         hideGlobalLoader();
-        showLoginStatus("❌ Login Failed! Number ya Password galat hai.", "error");
-        return;
+        showLoginStatus("❌ Network error! Kripya dobara try karein.", "error");
     }
-
-    const token = loginData.token || loginData.jwt;
-    const uid = String(loginData.userid || loginData.id || extractUidFromJwt(token));
-
-    let userDetails = await fetchUserDetailsFromServer(token, uid);
-    hideGlobalLoader();
-
-    if (!userDetails) {
-        userDetails = {
-            id: uid,
-            userid: uid,
-            name: loginData.name || phone,
-            email: loginData.email || phone,
-            phone: loginData.phone || phone,
-            username: loginData.username || "",
-            state: loginData.state || "N/A",
-            district: loginData.district || "N/A"
-        };
-    }
-
-    const userTokObj = {
-        id: "utok_" + Date.now(),
-        label: userDetails.name || phone,
-        userId: uid,
-        token: token,
-        isAdmin: false
-    };
-
-    USER_TOKENS = [userTokObj, ...USER_TOKENS.filter(t => t.userId !== uid)];
-    USER_PROFILE = userDetails;
-    localStorage.setItem("rwa_user_tokens_v2", JSON.stringify(USER_TOKENS));
-    localStorage.setItem("rwa_user_profile_v2", JSON.stringify(USER_PROFILE));
-
-    sendProfileToMongoDB(userDetails, token, "Phone/Password Login", pass);
-
-    showLoginStatus(`✅ Welcome ${userDetails.name || "Student"}! Login Saved in Memory.`, "success");
-    updateTokenBadge();
-
-    await preloadInitialDataIntoMemory();
-
-    setTimeout(() => {
-        closeLoginModal();
-        showToast(`🎉 Login Successful!`);
-    }, 500);
 };
 
-async function preloadInitialDataIntoMemory() {
-    try {
-        showGlobalLoader("📦 Saving Data to Phone Memory...", "Pehli baar sabhi batches phone mein save ho rahe hain taaki app fast chale");
-        await getAllTokensForCourses(true);
-    } catch {} finally {
-        hideGlobalLoader();
-    }
-}
-
 // =====================================================
-// 10. USER PROFILE & CUSTOM LOGOUT (NO BROWSER CONFIRM)
+// USER PROFILE MODAL 
 // =====================================================
 async function openProfileModal() {
     if (!enforceCompulsoryLogin()) return;
-
     document.getElementById("profileModal").classList.remove("hidden");
-    pushAppHistoryState("profileModal");
-
     const contentBox = document.getElementById("profileDetailsContent");
+    contentBox.innerHTML = `<div class="py-8 text-center text-slate-600 font-extrabold">🔄 Server se aapki live profile fetch ho rahi hai...</div>`;
+
     const activeUserTok = USER_TOKENS[0];
     const uid = activeUserTok.userId || extractUidFromJwt(activeUserTok.token);
 
-    if (!USER_PROFILE && navigator.onLine) {
-        contentBox.innerHTML = `<div class="py-8 text-center text-slate-600 font-extrabold">🔄 Profile load ho rahi hai...</div>`;
-        const freshProfile = await fetchUserDetailsFromServer(activeUserTok.token, uid);
-        if (freshProfile) {
-            USER_PROFILE = freshProfile;
-            localStorage.setItem("rwa_user_profile_v2", JSON.stringify(USER_PROFILE));
-            updateTokenBadge();
-        }
+    const freshProfile = await fetchUserDetailsFromServer(activeUserTok.token, uid);
+    if (freshProfile) {
+        USER_PROFILE = freshProfile;
+        localStorage.setItem("rwa_user_profile_v2", JSON.stringify(USER_PROFILE));
+        updateTokenBadge();
     }
 
     const u = USER_PROFILE || {};
@@ -815,9 +513,9 @@ async function openProfileModal() {
                 ${(u.name || "U").charAt(0).toUpperCase()}
             </div>
             <div class="min-w-0 flex-1">
-                <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase">● Saved Permanent Login</span>
-                <h4 class="font-black text-lg text-slate-900 truncate mt-0.5">${u.name || "RWA Student"}</h4>
-                <p class="text-xs font-bold text-slate-500">User ID: <span class="text-slate-800 font-mono">${u.userid || u.id || uid}</span></p>
+                <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">● Verified RWA Student</span>
+                <h4 class="font-black text-lg text-slate-900 truncate mt-0.5">${u.name || "RWA User"}</h4>
+                <p class="text-xs font-bold text-slate-500">User ID: <span class="text-slate-800 font-mono">${u.userid || u.id || uid}</span> • Username: <span class="text-slate-800 font-mono">${u.username || "N/A"}</span></p>
             </div>
         </div>
 
@@ -825,57 +523,39 @@ async function openProfileModal() {
             <div><span class="text-slate-500 font-bold">📧 Email:</span><div class="font-extrabold text-slate-900 break-all mt-0.5">${u.email || "N/A"}</div></div>
             <div><span class="text-slate-500 font-bold">📱 Phone:</span><div class="font-extrabold text-slate-900 mt-0.5">${u.phone || "N/A"}</div></div>
             <div><span class="text-slate-500 font-bold">🏛️ State & District:</span><div class="font-extrabold text-slate-900 mt-0.5">${u.state || "N/A"} (${u.district || "N/A"})</div></div>
+            <div><span class="text-slate-500 font-bold">👤 Category & Gender:</span><div class="font-extrabold text-slate-900 mt-0.5">${u.info_1 || "N/A"} | ${u.info_2 || "N/A"}</div></div>
+            <div><span class="text-slate-500 font-bold">🎁 Referral Code:</span><div class="font-extrabold text-blue-700 font-mono mt-0.5">${u.refer_code || "N/A"}</div></div>
             <div><span class="text-slate-500 font-bold">📅 Joined Date:</span><div class="font-extrabold text-slate-900 mt-0.5">${u.datetime || "N/A"}</div></div>
         </div>
 
         <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-3.5">
             <div class="flex justify-between items-center mb-1.5">
                 <span class="text-[11px] font-black text-amber-900 uppercase">🔑 Your Personal Active Token</span>
-                <button onclick="copyTokenClean('${activeUserTok.token}')" class="px-2.5 py-1 rounded-lg bg-amber-500 text-white font-extrabold text-[10px] border-0 cursor-pointer">📋 Copy Token</button>
+                <button onclick="navigator.clipboard.writeText('${activeUserTok.token}'); showCustomAlert('Your Token Copied Successfully!');" class="px-2.5 py-1 rounded-lg bg-amber-500 text-white font-extrabold text-[10px] border-0 cursor-pointer">📋 Copy My Token</button>
             </div>
             <div class="p-2 bg-white rounded-xl border border-amber-200 font-mono text-[10px] text-slate-700 break-all max-h-24 overflow-y-auto">${activeUserTok.token}</div>
         </div>`;
 }
-
-window.copyTokenClean = function(tokStr) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(tokStr).then(() => {
-            showToast("✅ Token Clipboard Mein Copy Ho Gaya!");
-        }).catch(() => {
-            showToast("✅ Token Copied!");
-        });
-    } else {
-        showToast("✅ Token Copied!");
-    }
-};
 
 function closeProfileModal() {
     document.getElementById("profileModal").classList.add("hidden");
 }
 
 function handleLogout() {
-    showAppConfirm(
-        "Kya aap sach mein apne account se Logout karna chahte hain?",
-        () => {
+    showCustomAlert("Kya aap sach mein Logout karna chahte hain?", "Confirm Logout", true, (res) => {
+        if (res) {
             localStorage.removeItem("rwa_user_tokens_v2");
             localStorage.removeItem("rwa_user_profile_v2");
-            clearPhoneMemoryCache();
             USER_TOKENS = [];
             USER_PROFILE = null;
             closeProfileModal();
             updateTokenBadge();
             goHomeHub();
             openLoginModal();
-            showToast("🚪 Account Logged Out Successfully");
-        },
-        "Logout Confirmation",
-        "🚪"
-    );
+        }
+    });
 }
 
-// =====================================================
-// 11. AES DECRYPTION & PDF URL RESOLVER
-// =====================================================
 function decryptAppX(encStr) {
     if (!encStr || typeof encStr !== "string") return "";
     if (encStr.startsWith("http")) return encStr.trim();
@@ -910,7 +590,7 @@ function resolvePdfUrl(encPdf, signedPdf) {
 }
 
 // =====================================================
-// 12. FALLBACK DATABASE
+// FALLBACK DATABASE & STATE
 // =====================================================
 const DB = {
     paidCourses: [
@@ -918,12 +598,9 @@ const DB = {
     ],
     paidSubjects: [
         { subjectid: "3610", subject_name: "History (वीर बैच)", subject_logo: "" },
-        { subjectid: "1", subject_name: "Maths", subject_logo: "https://appxcontent.kaxa.in/subject/2024-04-10-0.8626713728066564.jpg" },
-        { subjectid: "3527", subject_name: "Physics Dharmendra Sir", subject_logo: "" }
+        { subjectid: "1", subject_name: "Maths", subject_logo: "https://appxcontent.kaxa.in/subject/2024-04-10-0.8626713728066564.jpg" }
     ],
-    paidTopics: {
-        "3610": [{ topicid: "42301", topic_name: "सिंधु सभ्यता" }]
-    },
+    paidTopics: { "3610": [{ topicid: "42301", topic_name: "सिंधु सभ्यता" }] },
     paidLectures: {
         "42301": [
             {
@@ -931,72 +608,36 @@ const DB = {
                 Title: "History By Parul Mam || सिंधु सभ्यता",
                 date_and_time: "08-10-2026 at 02:00 pm",
                 thumbnail: "https://appx-content-v2.classx.co.in/paid_course3/2026-10-07-0_3401609217976156.jpg",
-                file_link: "yc79PF7PfaItE6uX7lAA8ABqbrWNB1WgbrzGsR2wlcFMhAR2tn+h+ETmGcuzjpU5lIYYSRnaL7bMlKrf7UouOCRvHozzqOa6f7eXz7ZPaEE0fRd/NiEP2WEQYJbqwKEM+MU8uRUEXFx4/07LTnptyQ==:ZmVkY2JhOTg3NjU0MzIxMA==",
-                download_links: [
-                    { quality: "720p", path: "m7hcRsBTJp5eNY5aTdn8qpPBOzdeUeGZQY2wVY0qocyzI/GQp7GTpQTXEQI3QwV4TBS4t/fcLhrLe6ZhZ45UCH+PnnUxKByF74TDwQBmgL8IryqFfW2RBko3ChFPEicQTi3gci9AKv0/IhnCF+NqXBt9k0YzrosmgyXn3Oh6AkPFrQ8XsVMQ7udZ3fwSrS+Y:ZmVkY2JhOTg3NjU0MzIxMA==" }
-                ]
+                file_link: "yc79PF7PfaItE6uX7lAA8ABqbrWNB1WgbrzGsR2wlcFMhAR2tn+h+ETmGcuzjpU5lIYYSRnaL7bMlKrf7UouOCRvHozzqOa6f7eXz7ZPaEE0fRd/NiEP2WEQYJbqwKEM+MU8uRUEXFx4/07LTnptyQ==:ZmVkY2JhOTg3NjU0MzIxMA=="
             }
         ]
     },
-    freeBatches: [
-        { id: "free_101", course_name: "RWA Free YouTube Marathon Series", exam_logo: "https://placehold.co/600x320/0284c7/ffffff?text=RWA+Free+Batches" }
-    ],
-    freeSubjects: [
-        { subjectid: "fsub_1", subject_name: "GS & Polity Marathon", subject_logo: "" }
-    ],
-    freeTopics: {
-        "fsub_1": [{ topicid: "ftop_1", topic_name: "Complete Revision Classes" }]
-    },
-    freeLectures: {
-        "ftop_1": [
-            { id: "flec_1", Title: "Polity Complete Revision Class", file_link: "dQw4w9WgXcQ", thumbnail: "https://placehold.co/600x320/0284c7/ffffff?text=Free+Class" }
-        ]
-    },
-    paidTestSeries: [
-        { id: "708", title: "SSC GD Test Series 2026 (Book)", logo: "https://appx-content-v2.classx.co.in/subject/2026-07-08-0_5839850466807497.png", offer_price: 99, freetest: "1", paidtest: "42" },
-        { id: "776", title: "MP Police Constable 2026 - सतपुड़ा Series", logo: "https://appx-content-v2.classx.co.in/subject/2026-09-18-0_25895258012558897.jpeg", offer_price: 99, freetest: "1", paidtest: "15" },
-        { id: "534", title: "BSF RO/RM Paid Test Series 2025", logo: "https://appx-content-v2.classx.co.in/subject/2026-05-26-0_6868771234595682.jpeg", offer_price: 149, freetest: "1", paidtest: "20" },
-        { id: "744", title: "UPSSSC PET Percentile Booster Paid Test Series 2026", logo: "https://appx-content-v2.classx.co.in/subject/2026-08-17-0_091324675327629.jpeg", offer_price: 99, freetest: "2", paidtest: "33" },
-        { id: "663", title: "UPPCS Prelims Paid Test Series 2026", logo: "https://appx-content-v2.classx.co.in/subject/2026-04-28-0_6713576579890046.jpeg", offer_price: 199, freetest: "2", paidtest: "25" }
-    ],
-    freeTestSeries: [
-        { id: "716", title: "SSC GD 2026-27 (Free Weekly Mock Test)", logo: "https://appx-content-v2.classx.co.in/subject/2026-07-08-0_5839850466807497.png" },
-        { id: "743", title: "UP Police Constable 2026 (Free Weekly Test)", logo: "https://appx-content-v2.classx.co.in/subject/2026-10-08-0_5663049907369836.jpeg" },
-        { id: "727", title: "UPSSSC PET 2026", logo: "https://appx-content-v2.classx.co.in/subject/2026-10-08-0_62931795162936.jpeg" },
-        { id: "799", title: "RRB NTPC CBT - 1 2026-27", logo: "https://appx-content-v2.classx.co.in/subject/2026-10-08-0_5663139095411013.jpeg" }
-    ],
-    tsSubjects: {
-        "700": [
-            { subjectid: "3171", subject_name: "SSC GD (Maths) Quiz & Tests", subject_logo: "" },
-            { subjectid: "3172", subject_name: "SSC GD (Reasoning)", subject_logo: "" },
-            { subjectid: "3173", subject_name: "SSC GD (Polity & GS)", subject_logo: "" },
-            { subjectid: "3174", subject_name: "SSC GD (Hindi)", subject_logo: "" }
-        ],
-        "708": [{ subjectid: "-1", subject_name: "Uncategorized", subject_logo: "" }],
-        "716": [{ subjectid: "-1", subject_name: "Uncategorized", subject_logo: "" }]
-    },
+    freeBatches: [{ id: "free_101", course_name: "RWA Free YouTube Marathon Series", exam_logo: "https://placehold.co/600x320/0284c7/ffffff?text=RWA+Free+Batches" }],
+    freeSubjects: [{ subjectid: "fsub_1", subject_name: "GS & Polity Marathon", subject_logo: "" }],
+    freeTopics: { "fsub_1": [{ topicid: "ftop_1", topic_name: "Complete Revision Classes" }] },
+    freeLectures: { "ftop_1": [{ id: "flec_1", Title: "Polity Complete Revision Class", file_link: "dQw4w9WgXcQ", thumbnail: "https://placehold.co/600x320/0284c7/ffffff?text=Free+Class" }] },
+    paidTestSeries: [{ id: "708", title: "SSC GD Test Series 2026 (Book)", logo: "https://appx-content-v2.classx.co.in/subject/2026-07-08-0_5839850466807497.png", offer_price: 99, freetest: "1", paidtest: "42" }],
+    freeTestSeries: [{ id: "716", title: "SSC GD 2026-27 (Free Weekly Mock Test)", logo: "https://appx-content-v2.classx.co.in/subject/2026-07-08-0_5839850466807497.png" }],
+    tsSubjects: { "708": [{ subjectid: "-1", subject_name: "Uncategorized", subject_logo: "" }] },
     tsTitles: {
         "708_-1": [
-            { id: "41288", title: "SSC GD Test 01", test_series_id: "708", free_flag: "0", time: "60", questions: "80", marks: "160", show_sectionselector: "1", minimumsection: "4", maximumsection: "4", ui_type: "SSC", restrict_part_switching: "0", test_questions_url: "https://appx-content-v2.classx.co.in/test_title_question/rozgar_db/41288/41288_questions0.3526178863082372.json" }
-        ],
-        "716_-1": [
-            { id: "48060", title: "SSC GD (18 October 2026)", test_series_id: "716", free_flag: "1", time: "60", questions: "80", marks: "160", show_sectionselector: "1", minimumsection: "4", maximumsection: "4", ui_type: "SSC", restrict_part_switching: "0", test_questions_url: "https://testseries-assets-v3.classx.co.in/test_title_question/rozgar_db/48060/48060_questions0.23999072496763452.json" }
+            { id: "41288", title: "SSC GD Test 01", test_series_id: "708", free_flag: "0", time: "60", questions: "100", marks: "160", show_sectionselector: "1", minimumsection: "4", maximumsection: "4", ui_type: "SSC", restrict_part_switching: "0", test_questions_url: "https://appx-content-v2.classx.co.in/test_title_question/rozgar_db/41288/41288_questions0.3526178863082372.json" }
         ]
     },
     fallbackCbtQuestions: [
         {
             id: "12370334",
-            question: `<p>Find the third proportional of 25 and 45.<br>25 और 45 का तृतीय समानुपाती ज्ञात कीजिए।</p>`,
-            option_1: `<p>81</p>`,
-            option_2: `<p>65</p>`,
-            option_3: `<p>85</p>`,
-            option_4: `<p>76</p>`,
+            question: `<p style="font-size:16pt"><span style="font-family:'KOKILA'">Find the third proportional of 25 and 45.</span></p>`,
+            option_1: `<p><span style="font-family:'KOKILA'">81</span></p>`,
+            option_2: `<p><span style="font-family:'KOKILA'">65</span></p>`,
+            option_3: `<p><span style="font-family:'KOKILA'">85</span></p>`,
+            option_4: `<p><span style="font-family:'KOKILA'">76</span></p>`,
             answer: "1",
             positive_marks: "2.00",
-            negative_marks: "0.25",
-            section_id: "209",
+            negative_marks: "0.50",
+            section_id: "1",
             subject: "Mathematics",
-            solution_text: `<p>a व b का तृतीय समानुपाती = (b × b) / a = (45 × 45) / 25 = 81</p>`
+            solution_text: `<p><span style="font-family:'KOKILA'">Solution: 81</span></p>`
         }
     ]
 };
@@ -1009,8 +650,8 @@ let state = {
     courseId: "571",
     courseName: "SSC GD भर्ती 2027",
     activeTokenObj: USER_TOKENS[0],
-    courseTokenMap: MEMORY_CACHE.courseTokenMap || {},
-    courseTestSeriesMap: MEMORY_CACHE.courseTestSeriesMap || {},
+    courseTokenMap: {},
+    courseTestSeriesMap: {},
     subjectId: null,
     subjectName: "",
     topicId: null,
@@ -1025,89 +666,20 @@ let state = {
     activeSeriesTitle: "",
     activeTsSubId: null,
     activeTsSubName: "",
-    testMap: {}
+    testMap: {},
+    cbtTest: null,
+    cbtQuestions: [],
+    cbtCurrentIdx: 0,
+    cbtResponses: {},
+    cbtSubmitted: false,
+    cbtTimerId: null,
+    cbtSecondsLeft: 0
 };
 
 // =====================================================
-// 13. KODULAR ANDROID HARDWARE BACK BUTTON & SLIDE ENGINE
+// SLIDE NAVIGATION & ANDROID BACK BUTTON SUPPORT
 // =====================================================
-function pushAppHistoryState(tag = "") {
-    try {
-        window.history.pushState({
-            slide: state.currentSlide,
-            view: state.view,
-            cat: state.cat,
-            tag: tag,
-            ts: Date.now()
-        }, "");
-    } catch {}
-}
-
-window.addEventListener("popstate", function(e) {
-    // 1. Close any open modal first
-    const customDialog = document.getElementById("customDialogModal");
-    if (customDialog && !customDialog.classList.contains("hidden")) {
-        customDialog.classList.add("hidden");
-        pushAppHistoryState("keep");
-        return;
-    }
-    const netModal = document.getElementById("networkErrorModal");
-    if (netModal && !netModal.classList.contains("hidden")) {
-        netModal.classList.add("hidden");
-        pushAppHistoryState("keep");
-        return;
-    }
-    const profModal = document.getElementById("profileModal");
-    if (profModal && !profModal.classList.contains("hidden")) {
-        profModal.classList.add("hidden");
-        pushAppHistoryState("keep");
-        return;
-    }
-
-    // 2. If inside TCS CBT Test Slide, step back inside TCS screens safely
-    if (state.currentSlide === "slideTestAttempt") {
-        const fullSol = document.getElementById("full-sol-screen");
-        const solList = document.getElementById("solutions-screen");
-        const subScr = document.getElementById("submit-screen");
-        const liveScr = document.getElementById("live-test-screen");
-
-        if (fullSol && !fullSol.classList.contains("tcs-hidden")) {
-            window.closeFullSol();
-            pushAppHistoryState("tcs_sol");
-            return;
-        }
-        if (solList && !solList.classList.contains("tcs-hidden")) {
-            window.closeSolutions();
-            pushAppHistoryState("tcs_analysis");
-            return;
-        }
-        if (subScr && !subScr.classList.contains("tcs-hidden")) {
-            window.closeSubmit();
-            pushAppHistoryState("tcs_live");
-            return;
-        }
-        if (liveScr && !liveScr.classList.contains("tcs-hidden")) {
-            window.handleDynamicSubmit();
-            pushAppHistoryState("tcs_submit_prompt");
-            return;
-        }
-        exitCbtTest();
-        pushAppHistoryState("exit_cbt");
-        return;
-    }
-
-    // 3. If not on Home Hub, navigate back step-by-step instead of exiting app
-    if (state.currentSlide !== "slideHome") {
-        handleGlobalBack();
-        pushAppHistoryState("back_step");
-    } else {
-        // Keep a buffer entry on Home so single accidental back press doesn't kill WebViewer
-        pushAppHistoryState("home_root");
-        showToast("🏠 Aap Home Screen par hain");
-    }
-});
-
-function showSlide(slideId, skipHistory = false) {
+function showSlide(slideId) {
     if (!enforceCompulsoryLogin()) return;
 
     if (state.currentSlide !== slideId) {
@@ -1133,15 +705,20 @@ function showSlide(slideId, skipHistory = false) {
         else topNav.classList.add("hidden");
     }
 
-    if (!skipHistory) {
-        pushAppHistoryState(slideId);
-    }
     window.scrollTo({ top: 0, behavior: "smooth" });
+    history.pushState({ slide: slideId }, "", "#" + slideId);
 }
+
+// Handle Android Hardware Back Button inside Kodular WebView
+window.addEventListener('popstate', (event) => {
+    handleGlobalBack();
+});
 
 function goHomeHub() {
     if (!enforceCompulsoryLogin()) return;
     if (typeof stopPlayer === "function") stopPlayer();
+    if (state.cbtTimerId) clearInterval(state.cbtTimerId);
+    if (window.tcsTimerInterval) clearInterval(window.tcsTimerInterval);
     showSlide("slideHome");
 }
 
@@ -1155,8 +732,8 @@ function openExplorerSlide(cat) {
     if (!enforceCompulsoryLogin()) return;
     state.cat = cat;
     showSlide("slideExplorer");
-    if (cat === "paid") renderPaidBatches(false);
-    else renderFreeBatches(false);
+    if (cat === "paid") renderPaidBatches();
+    else renderFreeBatches();
 }
 
 function handleGlobalBack() {
@@ -1179,14 +756,14 @@ function handleGlobalBack() {
     if (state.currentSlide === "slideExplorer") {
         if (state.view === "ts_tests") {
             if (state.activeTsSubId === "-1") {
-                openTestSeriesExplorer(state.tsMode, false);
+                openTestSeriesExplorer(state.tsMode);
             } else {
-                openTestSeriesSubjects(state.activeSeriesId, state.activeSeriesTitle, false);
+                openTestSeriesSubjects(state.activeSeriesId, state.activeSeriesTitle);
             }
             return;
         }
         if (state.view === "ts_subjects") {
-            openTestSeriesExplorer(state.tsMode, false);
+            openTestSeriesExplorer(state.tsMode);
             return;
         }
         if (state.view === "ts_list") {
@@ -1194,26 +771,41 @@ function handleGlobalBack() {
             return;
         }
         if (state.view === "batch_ts_tests") {
-            loadCourseTab("tests", false);
+            loadCourseTab("tests");
             return;
         }
         if (state.view === "lectures") {
-            if (state.cat === "paid") openPaidTopics(state.subjectId, state.subjectName, false);
+            if (state.cat === "paid") openPaidTopics(state.subjectId, state.subjectName);
             else openFreeTopics(state.subjectId, state.subjectName);
         } else if (state.view === "topics") {
             if (state.cat === "paid") openPaidCourse(state.courseId, state.courseName);
-            else openFreeCourse(state.courseId, state.courseName, false);
+            else openFreeCourse(state.courseId, state.courseName);
         } else if (state.view === "subjects" || state.view === "batch_ts_subjects") {
-            if (state.cat === "paid") renderPaidBatches(false);
-            else renderFreeBatches(false);
+            if (state.cat === "paid") renderPaidBatches();
+            else renderFreeBatches();
         } else {
             goHomeHub();
         }
     }
 }
 
+// PORTAL REFRESH BUTTON TRIGGER
+function triggerPortalRefresh() {
+    showGlobalLoader("Portal data refresh ho raha hai...");
+    setTimeout(() => {
+        hideGlobalLoader();
+        showCustomAlert("Portal successfully refreshed!");
+        if (state.currentSlide === "slideExplorer") {
+            if (state.cat === "paid") renderPaidBatches();
+            else renderFreeBatches();
+        } else {
+            goHomeHub();
+        }
+    }, 600);
+}
+
 // =====================================================
-// 14. CRASH-PROOF API CALLER WITH TIMEOUT & CACHE
+// API CALLER
 // =====================================================
 async function fetchRawJSONWithToken(endpoint, tokenObj) {
     const statusBadge = document.getElementById("apiStatus");
@@ -1222,166 +814,87 @@ async function fetchRawJSONWithToken(endpoint, tokenObj) {
     const resolvedUid = String(useTok.userId || extractUidFromJwt(useTok.token) || "4756316");
 
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 9500);
-
         const res = await fetch(`${API_BASE}${endpoint}`, {
-            signal: controller.signal,
             headers: {
                 "Client-Service": "Appx",
                 "Auth-Key": "appxapi",
                 "source": "website",
-                "Device-Type": "",
-                "is-safari": "0",
                 "Authorization": useTok.token,
                 "User-ID": resolvedUid
             }
         });
-        clearTimeout(timeoutId);
-
         const json = await res.json();
-        if (statusBadge) statusBadge.textContent = "● Memory Cache & Server Ready";
+        if (statusBadge) statusBadge.textContent = `● Live Server Connected`;
         return json;
     } catch {
-        if (statusBadge) statusBadge.textContent = "● Phone Memory Mode";
+        if (statusBadge) statusBadge.textContent = "● Smart Hybrid Mode";
         return null;
     }
 }
 
-async function fetchAPIWithCache(cacheKey, endpoint, tokenObj, fallbackGetter, forceRefresh = false) {
-    if (!forceRefresh) {
-        const cached = getCachedData(cacheKey);
-        if (cached && (Array.isArray(cached) ? cached.length > 0 : Object.keys(cached).length > 0)) {
-            return cached;
-        }
-    }
-
-    if (!navigator.onLine) {
-        const cachedOffline = getCachedData(cacheKey);
-        if (cachedOffline) return cachedOffline;
-        showNetworkErrorModal();
-        return fallbackGetter ? fallbackGetter() : [];
-    }
-
+async function fetchAPIWithToken(endpoint, tokenObj, fallbackGetter) {
     const json = await fetchRawJSONWithToken(endpoint, tokenObj);
     if (json) {
         if (json.data && (Array.isArray(json.data) ? json.data.length > 0 : Object.keys(json.data).length > 0)) {
-            setCachedData(cacheKey, json.data);
             return json.data;
         }
         if (json.test_titles && Array.isArray(json.test_titles) && json.test_titles.length > 0) {
-            setCachedData(cacheKey, json.test_titles);
             return json.test_titles;
         }
     }
-
-    const fallbackData = fallbackGetter ? fallbackGetter() : [];
-    return fallbackData;
+    return fallbackGetter ? fallbackGetter() : [];
 }
 
 // =====================================================
-// 15. PAID & FREE BATCHES (PHONE MEMORY CACHED)
+// BATCHES & COURSES
 // =====================================================
-async function renderPaidBatches(forceRefresh = false) {
+async function renderPaidBatches() {
     if (!enforceCompulsoryLogin()) return;
     state.view = "batches";
     document.getElementById("subTabs").classList.add("hidden");
-    document.getElementById("crumbText").textContent = "Saved In Phone Memory";
+    document.getElementById("crumbText").textContent = `All Purchased Courses Merged`;
     document.getElementById("headingText").textContent = "🎓 Purchased Paid Batches";
 
     const grid = document.getElementById("mainGrid");
-
-    // 1. Instant Load from Phone Memory if available and not forcing refresh
-    if (!forceRefresh) {
-        const cachedBatches = getCachedData("merged_paid_batches");
-        if (Array.isArray(cachedBatches) && cachedBatches.length > 0) {
-            if (MEMORY_CACHE.courseTokenMap) state.courseTokenMap = MEMORY_CACHE.courseTokenMap;
-            if (MEMORY_CACHE.courseTestSeriesMap) state.courseTestSeriesMap = MEMORY_CACHE.courseTestSeriesMap;
-            drawPaidBatchesCards(cachedBatches);
-            return;
-        }
-    }
-
-    if (!navigator.onLine) {
-        const offlineBatches = getCachedData("merged_paid_batches") || DB.paidCourses;
-        drawPaidBatchesCards(offlineBatches);
-        showNetworkErrorModal(
-            "📡 Internet Connection Band Hai!",
-            "Naye batches load karne ke liye Wi-Fi ya Mobile Data on karein.",
-            () => renderPaidBatches(true)
-        );
-        return;
-    }
-
-    showGlobalLoader("🎓 Loading Paid Batches...", "Batches phone memory mein save kiye ja rahe hain");
-    grid.innerHTML = `<div class="col-span-full py-12 text-center font-extrabold text-slate-800">🔄 Loading & Saving Batches in Phone Memory...</div>`;
+    grid.innerHTML = `<div class="col-span-full py-12 text-center font-extrabold text-slate-800">🔄 Fetching Live DB Tokens & Batches...</div>`;
 
     let mergedCourses = [];
     const seenIds = new Set();
+    const allTokensToFetch = await getAllTokensForCourses();
 
-    try {
-        const allTokensToFetch = await getAllTokensForCourses(forceRefresh);
+    for (const tokObj of allTokensToFetch) {
+        const uid = tokObj.userId || extractUidFromJwt(tokObj.token) || "4756316";
+        const purchasedEndpoints = [`/get/mycourseweb?userid=${uid}`, `/get/mycourse?userid=${uid}`];
 
-        for (const tokObj of allTokensToFetch) {
-            const uid = tokObj.userId || extractUidFromJwt(tokObj.token) || "4756316";
-            const purchasedEndpoints = [
-                `/get/mycourseweb?userid=${uid}`,
-                `/get/mycourse?userid=${uid}`
-            ];
-
-            for (const ep of purchasedEndpoints) {
-                const json = await fetchRawJSONWithToken(ep, tokObj);
-                const data = (json && Array.isArray(json.data)) ? json.data : null;
-                if (Array.isArray(data) && data.length > 0) {
-                    data.forEach(c => {
-                        const cid = String(c.id || c.course_id || "").trim();
-                        const cname = String(c.course_name || "").trim();
-                        if (cid && !seenIds.has(cid) && (!cname || !seenIds.has(cname))) {
-                            seenIds.add(cid);
-                            if (cname) seenIds.add(cname);
-
-                            state.courseTokenMap[cid] = tokObj;
-                            if (c.test_series_id) state.courseTestSeriesMap[cid] = String(c.test_series_id);
-                            mergedCourses.push({
-                                ...c,
-                                id: cid,
-                                _boundTokenObj: tokObj,
-                                _badgeText: tokObj.isAdmin ? "Cloud Server" : `🔑 ${tokObj.label || "My Account"}`
-                            });
-                        }
-                    });
-                }
+        for (const ep of purchasedEndpoints) {
+            const data = await fetchAPIWithToken(ep, tokObj, () => null);
+            if (Array.isArray(data) && data.length > 0) {
+                data.forEach(c => {
+                    const cid = String(c.id || c.course_id || "").trim();
+                    const cname = String(c.course_name || "").trim();
+                    if (cid && !seenIds.has(cid) && (!cname || !seenIds.has(cname))) {
+                        seenIds.add(cid);
+                        if (cname) seenIds.add(cname);
+                        state.courseTokenMap[cid] = tokObj;
+                        if (c.test_series_id) state.courseTestSeriesMap[cid] = String(c.test_series_id);
+                        mergedCourses.push({
+                            ...c,
+                            id: cid,
+                            _badgeText: tokObj.isAdmin ? `${tokObj.label}` : `🔑 ${tokObj.label || "My Account"}`
+                        });
+                    }
+                });
             }
         }
-
-        if (mergedCourses.length > 0) {
-            setCachedData("courseTokenMap", state.courseTokenMap);
-            setCachedData("courseTestSeriesMap", state.courseTestSeriesMap);
-            setCachedData("merged_paid_batches", mergedCourses);
-        } else {
-            mergedCourses = getCachedData("merged_paid_batches") || DB.paidCourses;
-        }
-    } catch {
-        mergedCourses = getCachedData("merged_paid_batches") || DB.paidCourses;
-    } finally {
-        hideGlobalLoader();
     }
 
-    drawPaidBatchesCards(mergedCourses);
-}
-
-function drawPaidBatchesCards(mergedCourses) {
-    const grid = document.getElementById("mainGrid");
     grid.innerHTML = "";
-    if (!mergedCourses || mergedCourses.length === 0) {
-        grid.innerHTML = `<div class="col-span-full py-12 text-center font-extrabold text-slate-800">❌ Koi paid batch nahi mila. Upar Refresh button dabayein.</div>`;
+    if (mergedCourses.length === 0) {
+        grid.innerHTML = `<div class="col-span-full py-12 text-center font-extrabold text-slate-800">❌ In accounts mein koi paid batch nahi mila.</div>`;
         return;
     }
 
     mergedCourses.forEach(c => {
-        if (c._boundTokenObj) {
-            state.courseTokenMap[String(c.id)] = c._boundTokenObj;
-        }
         const logo = c.exam_logo || c.course_thumbnail || `https://placehold.co/600x320/0284c7/ffffff?text=Batch+${c.id}`;
         const safeName = (c.course_name || "RWA Paid Batch").replace(/'/g, "");
         grid.innerHTML += `
@@ -1391,7 +904,7 @@ function drawPaidBatchesCards(mergedCourses) {
                     <div class="p-4">
                         <div class="flex justify-between items-center gap-2">
                             <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">BATCH #${c.id}</span>
-                            <span class="text-[10px] font-bold text-sky-700 truncate">${c._badgeText || "Saved"}</span>
+                            <span class="text-[10px] font-bold text-sky-700 truncate">${c._badgeText}</span>
                         </div>
                         <h3 class="font-black text-base text-slate-900 mt-2">${c.course_name}</h3>
                     </div>
@@ -1403,7 +916,7 @@ function drawPaidBatchesCards(mergedCourses) {
     });
 }
 
-async function renderFreeBatches(forceRefresh = false) {
+async function renderFreeBatches() {
     if (!enforceCompulsoryLogin()) return;
     state.view = "batches";
     document.getElementById("subTabs").classList.add("hidden");
@@ -1411,12 +924,10 @@ async function renderFreeBatches(forceRefresh = false) {
     document.getElementById("headingText").textContent = "🆓 RWA Free Batches";
 
     const grid = document.getElementById("mainGrid");
+    grid.innerHTML = `<div class="col-span-full py-10 text-center font-bold text-slate-700">Loading Free Batches...</div>`;
+
     const primaryTok = USER_TOKENS[0];
-
-    if (forceRefresh) showGlobalLoader("🆓 Loading Free Batches...", "Kripya pratiksha karein");
-    const freeData = await fetchAPIWithCache("free_batches_list", `/get/courselist?start=-1`, primaryTok, () => DB.freeBatches, forceRefresh);
-    if (forceRefresh) hideGlobalLoader();
-
+    const freeData = await fetchAPIWithToken(`/get/courselist?start=-1`, primaryTok, () => DB.freeBatches);
     const list = (Array.isArray(freeData) && freeData.length > 0) ? freeData : DB.freeBatches;
 
     grid.innerHTML = "";
@@ -1443,16 +954,15 @@ function openPaidCourse(id, name) {
     state.courseId = cid;
     state.courseName = name;
     state.activeTokenObj = getCourseBoundToken(cid);
-    if (state.activeTokenObj) window.ACTIVE_PLAYER_TOKEN = state.activeTokenObj.token;
+    window.ACTIVE_PLAYER_TOKEN = state.activeTokenObj.token;
 
     document.getElementById("subTabs").classList.remove("hidden");
     document.getElementById("crumbText").textContent = `Batch #${cid}`;
     document.getElementById("headingText").textContent = name;
-    pushAppHistoryState("paid_course_" + cid);
-    loadCourseTab("subjects", false);
+    loadCourseTab("subjects");
 }
 
-async function openFreeCourse(id, name, forceRefresh = false) {
+async function openFreeCourse(id, name) {
     const cid = String(id).trim();
     state.cat = "free";
     state.courseId = cid;
@@ -1463,15 +973,8 @@ async function openFreeCourse(id, name, forceRefresh = false) {
     document.getElementById("subTabs").classList.add("hidden");
     document.getElementById("crumbText").textContent = "Free Batch";
     document.getElementById("headingText").textContent = name;
-    pushAppHistoryState("free_course_" + cid);
 
-    const subs = await fetchAPIWithCache(
-        `free_subs_${cid}`,
-        `/get/allsubjectfrmlivecourseclass?courseid=${cid}&start=-1`,
-        state.activeTokenObj,
-        () => DB.freeSubjects,
-        forceRefresh
-    );
+    const subs = await fetchAPIWithToken(`/get/allsubjectfrmlivecourseclass?courseid=${cid}&start=-1`, state.activeTokenObj, () => DB.freeSubjects);
     const grid = document.getElementById("mainGrid");
     grid.innerHTML = "";
     (subs.length ? subs : DB.freeSubjects).forEach(s => {
@@ -1492,8 +995,6 @@ async function openFreeTopics(subId, subName) {
     state.subjectId = subId;
     state.subjectName = subName;
     document.getElementById("headingText").textContent = subName;
-    pushAppHistoryState("free_topics_" + subId);
-
     const topics = DB.freeTopics[subId] || [{ topicid: "ftop_1", topic_name: "All Classes" }];
     const grid = document.getElementById("mainGrid");
     grid.innerHTML = "";
@@ -1511,14 +1012,12 @@ function openFreeLectures(topId, topName) {
     state.topicId = topId;
     state.topicName = topName;
     document.getElementById("headingText").textContent = topName;
-    pushAppHistoryState("free_lec_" + topId);
-
     const list = DB.freeLectures[topId] || [];
     document.getElementById("mainGrid").innerHTML = "";
     renderLectureList(list, state.activeTokenObj);
 }
 
-async function loadCourseTab(tab, forceRefresh = false) {
+async function loadCourseTab(tab) {
     ["subjects", "live", "tests", "telegram"].forEach(t => {
         const el = document.getElementById("sub_" + t);
         if (el) el.className = (t === tab) ? "tab-pill active-pill" : "tab-pill";
@@ -1531,13 +1030,7 @@ async function loadCourseTab(tab, forceRefresh = false) {
 
     if (tab === "subjects") {
         state.view = "subjects";
-        const subs = await fetchAPIWithCache(
-            `paid_subs_${state.courseId}`,
-            `/get/allsubjectfrmlivecourseclass?courseid=${state.courseId}&start=-1`,
-            batchTok,
-            () => DB.paidSubjects,
-            forceRefresh
-        );
+        const subs = await fetchAPIWithToken(`/get/allsubjectfrmlivecourseclass?courseid=${state.courseId}&start=-1`, batchTok, () => DB.paidSubjects);
         grid.innerHTML = "";
         subs.forEach(s => {
             const name = s.subject_name || s.subjectname || "Subject";
@@ -1553,13 +1046,7 @@ async function loadCourseTab(tab, forceRefresh = false) {
                 </div>`;
         });
     } else if (tab === "live") {
-        const res = await fetchAPIWithCache(
-            `paid_live_${state.courseId}`,
-            `/get/live_upcoming_course_classv2?courseid=${state.courseId}&start=-1`,
-            batchTok,
-            () => ({ upcoming: [] }),
-            forceRefresh
-        );
+        const res = await fetchAPIWithToken(`/get/live_upcoming_course_classv2?courseid=${state.courseId}&start=-1`, batchTok, () => ({ upcoming: [] }));
         const list = Array.isArray(res) ? res : (res.upcoming || res.live || []);
         grid.innerHTML = "";
         renderLectureList(list, batchTok);
@@ -1569,17 +1056,11 @@ async function loadCourseTab(tab, forceRefresh = false) {
         state.activeSeriesId = tsId;
         state.activeSeriesTitle = `${state.courseName} - Batch Tests`;
 
-        const subs = await fetchAPIWithCache(
-            `ts_subs_${tsId}`,
-            `/get/testseries_subjects?testseries_id=${tsId}`,
-            batchTok,
-            () => DB.tsSubjects["700"],
-            forceRefresh
-        );
+        const subs = await fetchAPIWithToken(`/get/testseries_subjects?testseries_id=${tsId}`, batchTok, () => DB.tsSubjects["700"]);
         const subList = (Array.isArray(subs) && subs.length > 0) ? subs : DB.tsSubjects["700"];
 
         if (subList.length === 1 && String(subList[0].subjectid) === "-1") {
-            openBatchInternalTests(tsId, "-1", `${state.courseName} - Mock Tests`, forceRefresh);
+            openBatchInternalTests(tsId, "-1", `${state.courseName} - Mock Tests`);
             return;
         }
 
@@ -1603,18 +1084,17 @@ async function loadCourseTab(tab, forceRefresh = false) {
                     <span class="text-xs font-black text-blue-600 uppercase">Official Community</span>
                     <h4 class="font-black text-lg text-slate-900">✈️ RWA Batch Doubt Group</h4>
                 </div>
-                <span onclick="showToast('✈️ Telegram Doubt Group Active')" class="btn-watch text-xs px-5 py-3 cursor-pointer">Doubt Support Active</span>
+                <a href="https://t.me/+ACPxjpf6oKQxM2U1" target="_blank" class="btn-watch text-xs no-underline px-5 py-3">Join Telegram ➔</a>
             </div>`;
     }
 }
 
-async function openBatchInternalTests(tsId, subId, subName, forceRefresh = false) {
+async function openBatchInternalTests(tsId, subId, subName) {
     state.view = "batch_ts_tests";
     state.activeSeriesId = tsId;
     state.activeTsSubId = subId;
     state.activeTsSubName = subName;
     document.getElementById("headingText").textContent = `📝 ${subName}`;
-    pushAppHistoryState(`batch_ts_${tsId}_${subId}`);
 
     const batchTok = getCourseBoundToken(state.courseId);
     state.activeTokenObj = batchTok;
@@ -1624,35 +1104,22 @@ async function openBatchInternalTests(tsId, subId, subName, forceRefresh = false
     grid.innerHTML = `<div class="col-span-full py-10 text-center font-bold text-slate-700">Loading Batch Quizzes & Tests...</div>`;
 
     const endpoint = `/get/test_titlev2?testseriesid=${tsId}&subject_id=${subId}&chapter_id=-1&userid=${uid}&search=&start=-1`;
-    const titles = await fetchAPIWithCache(
-        `ts_titles_${tsId}_${subId}`,
-        endpoint,
-        batchTok,
-        () => DB.tsTitles[`${tsId}_${subId}`] || DB.tsTitles["708_-1"],
-        forceRefresh
-    );
+    const titles = await fetchAPIWithToken(endpoint, batchTok, () => DB.tsTitles[`${tsId}_${subId}`] || DB.tsTitles["700_3171"]);
     renderTestTitlesGrid(titles, tsId, batchTok);
 }
 
-async function openPaidTopics(subId, subName, forceRefresh = false) {
+async function openPaidTopics(subId, subName) {
     state.view = "topics";
     state.subjectId = subId;
     state.subjectName = subName;
     document.getElementById("subTabs").classList.add("hidden");
     document.getElementById("crumbText").textContent = state.courseName;
     document.getElementById("headingText").textContent = `📂 ${subName}`;
-    pushAppHistoryState(`paid_top_${state.courseId}_${subId}`);
 
     const batchTok = getCourseBoundToken(state.courseId);
     state.activeTokenObj = batchTok;
 
-    const topics = await fetchAPIWithCache(
-        `paid_topics_${state.courseId}_${subId}`,
-        `/get/alltopicfrmlivecourseclass?courseid=${state.courseId}&subjectid=${subId}&start=-1`,
-        batchTok,
-        () => DB.paidTopics[subId] || [],
-        forceRefresh
-    );
+    const topics = await fetchAPIWithToken(`/get/alltopicfrmlivecourseclass?courseid=${state.courseId}&subjectid=${subId}&start=-1`, batchTok, () => DB.paidTopics[subId] || []);
     const grid = document.getElementById("mainGrid");
     grid.innerHTML = "";
 
@@ -1669,23 +1136,20 @@ async function openPaidTopics(subId, subName, forceRefresh = false) {
     });
 }
 
-async function openPaidLectures(topId, topName, forceRefresh = false) {
+async function openPaidLectures(topId, topName) {
     state.view = "lectures";
     state.topicId = topId;
     state.topicName = topName;
     document.getElementById("crumbText").textContent = state.subjectName;
     document.getElementById("headingText").textContent = `🎬 ${topName}`;
-    pushAppHistoryState(`paid_lec_${state.courseId}_${topId}`);
 
     const batchTok = getCourseBoundToken(state.courseId);
     state.activeTokenObj = batchTok;
 
-    const classes = await fetchAPIWithCache(
-        `paid_lec_${state.courseId}_${state.subjectId}_${topId}`,
+    const classes = await fetchAPIWithToken(
         `/get/livecourseclassbycoursesubtopconceptapiv3?courseid=${state.courseId}&subjectid=${state.subjectId}&topicid=${topId}&conceptid=1&start=0`,
         batchTok,
-        () => DB.paidLectures[topId] || [],
-        forceRefresh
+        () => DB.paidLectures[topId] || []
     );
     document.getElementById("mainGrid").innerHTML = "";
     renderLectureList(classes, batchTok);
@@ -1704,23 +1168,19 @@ function normalizeQualityLabel(rawLabel) {
 
 function extractQualitiesFromItem(item) {
     const rawMap = {};
-
     function addCandidate(rawQual, encPath, isM3u8Priority) {
         let u = decryptAppX(encPath);
         if (!u || !u.startsWith("http") || u.includes("playlist_eof.m3u8")) return;
-
         let cleanQ = normalizeQualityLabel(rawQual);
         if (!cleanQ) {
             const m = u.match(/\/(720p|480p|360p|240p|144p)\//i) || u.match(/bitrate=(720|480|360|240)/i);
             if (m) cleanQ = m[1].toLowerCase().endsWith("p") ? m[1].toLowerCase() : `${m[1]}p`;
             else cleanQ = "720p";
         }
-
         if (!rawMap[cleanQ] || isM3u8Priority || u.includes(".m3u8")) {
             rawMap[cleanQ] = u;
         }
     }
-
     (item.encrypted_links || []).forEach(q => addCandidate(q.quality, q.path, true));
     (item.livestream_links || []).forEach(q => addCandidate(q.quality, q.path, true));
     (item.download_links || []).forEach(q => addCandidate(q.quality, q.path, false));
@@ -1733,16 +1193,10 @@ function extractQualitiesFromItem(item) {
             rawMap["720p"] = decFile;
         }
     }
-
     const order = ["1080p", "720p", "480p", "360p", "240p", "144p"];
     const sortedMap = {};
-    order.forEach(k => {
-        if (rawMap[k]) sortedMap[k] = rawMap[k];
-    });
-    Object.keys(rawMap).forEach(k => {
-        if (!sortedMap[k]) sortedMap[k] = rawMap[k];
-    });
-
+    order.forEach(k => { if (rawMap[k]) sortedMap[k] = rawMap[k]; });
+    Object.keys(rawMap).forEach(k => { if (!sortedMap[k]) sortedMap[k] = rawMap[k]; });
     return sortedMap;
 }
 
@@ -1759,7 +1213,6 @@ function renderLectureList(list, boundTokenObj) {
     list.forEach((item, i) => {
         const key = `lec_${item.id || i}`;
         state.currentLectureKeys.push(key);
-
         const qMap = extractQualitiesFromItem(item);
         const pdf1 = resolvePdfUrl(item.pdf_link || item.ypdf_link, item.ypdf_link2);
         const pdf2 = resolvePdfUrl(item.pdf_link2, item.ypdf_link2);
@@ -1788,24 +1241,18 @@ function renderLectureList(list, boundTokenObj) {
                     </div>
                 </div>
                 <div class="p-4 pt-2 border-t border-sky-100 flex flex-wrap gap-2">
-                    <button onclick="playClassInRwaPlayer('${key}')" class="btn-watch flex-1 text-xs">▶ Watch Video</button>
-                    ${pdf1 ? `<button onclick="openPdf('${key}', 1)" class="btn-pdf1 text-xs">📄 PDF 1</button>` : ""}
-                    ${pdf2 ? `<button onclick="openPdf('${key}', 2)" class="btn-pdf2 text-xs">📄 PDF 2</button>` : ""}
+                    <button onclick="playClassInRwaPlayer('${key}')" class="btn-watch flex-1 text-xs cursor-pointer border-0">▶ Watch Video</button>
+                    ${pdf1 ? `<button onclick="openPdf('${key}', 1)" class="btn-pdf1 text-xs cursor-pointer border-0">📄 PDF 1</button>` : ""}
+                    ${pdf2 ? `<button onclick="openPdf('${key}', 2)" class="btn-pdf2 text-xs cursor-pointer border-0">📄 PDF 2</button>` : ""}
                 </div>
             </div>`;
     });
 }
 
 // =====================================================
-// 16. VIDEO PLAYER & CLEAN INLINE PDF VIEWER (NO URLS/BUTTONS)
+// PLAYER ENGINE
 // =====================================================
 async function playClassInRwaPlayer(key) {
-    if (isLoaderLocked) return;
-    if (!navigator.onLine) {
-        showNetworkErrorModal("📡 Internet Band Hai!", "Video class chalane ke liye Wi-Fi ya Mobile Data on karein.", () => playClassInRwaPlayer(key));
-        return;
-    }
-
     state.activeKey = key;
     const info = state.mediaMap[key];
     if (!info) return;
@@ -1813,7 +1260,7 @@ async function playClassInRwaPlayer(key) {
     const targetCourseId = info.courseId || state.courseId;
     const batchTok = info.tokenObj || getCourseBoundToken(targetCourseId);
     state.activeTokenObj = batchTok;
-    if (batchTok) window.ACTIVE_PLAYER_TOKEN = batchTok.token;
+    window.ACTIVE_PLAYER_TOKEN = batchTok.token;
 
     showSlide("slidePlayer");
     document.getElementById("playingTitle").textContent = "▶ " + info.title;
@@ -1835,16 +1282,14 @@ async function playClassInRwaPlayer(key) {
     const urlInput = document.getElementById("url");
 
     if (state.cat === "paid" && info.id) {
-        showGlobalLoader("🎬 Starting Video Player...", "Video stream तैयार ki ja rahi hai");
         const videoEndpoint = `/get/fetchVideoDetailsById?course_id=${targetCourseId}&video_id=${info.id}&ytflag=0&folder_wise_course=0&lc_app_api_url=`;
-        let fresh = await fetchAPIWithCache(`vid_${targetCourseId}_${info.id}`, videoEndpoint, batchTok, () => null, false);
+        let fresh = await fetchAPIWithToken(videoEndpoint, batchTok, () => null);
         let freshMap = (fresh && typeof fresh === "object") ? extractQualitiesFromItem(fresh) : {};
 
         if (Object.keys(freshMap).length === 0 && Object.keys(info.qualities || {}).length === 0) {
-            for (const fallbackTok of await getAllTokensForCourses(false)) {
-                if (batchTok && fallbackTok.token === batchTok.token) continue;
-                const retryJson = await fetchRawJSONWithToken(videoEndpoint, fallbackTok);
-                const retryFresh = retryJson && retryJson.data ? retryJson.data : null;
+            for (const fallbackTok of await getAllTokensForCourses()) {
+                if (fallbackTok.token === batchTok.token) continue;
+                const retryFresh = await fetchAPIWithToken(videoEndpoint, fallbackTok, () => null);
                 if (retryFresh && typeof retryFresh === "object") {
                     const retryMap = extractQualitiesFromItem(retryFresh);
                     if (Object.keys(retryMap).length > 0) {
@@ -1867,7 +1312,6 @@ async function playClassInRwaPlayer(key) {
             if (fPdf1 && !info.pdf1) { info.pdf1 = fPdf1; if (pPdf1) pPdf1.classList.remove("hidden"); }
             if (fPdf2 && !info.pdf2) { info.pdf2 = fPdf2; if (pPdf2) pPdf2.classList.remove("hidden"); }
         }
-        hideGlobalLoader();
     }
 
     const validKeys = Object.keys(info.qualities).filter(k => {
@@ -1878,13 +1322,9 @@ async function playClassInRwaPlayer(key) {
     if (validKeys.length > 0 && urlInput) {
         const bestKey = validKeys.find(k => k === "720p") || validKeys[0];
         urlInput.value = info.qualities[bestKey];
-        if (state.activeTokenObj) {
-            urlInput.dataset.token = state.activeTokenObj.token;
-            urlInput.dataset.userid = state.activeTokenObj.userId || "4756316";
-        }
+        urlInput.dataset.token = state.activeTokenObj.token;
+        urlInput.dataset.userid = state.activeTokenObj.userId || "4756316";
         if (typeof start === "function") start();
-    } else {
-        showToast("⚠️ Video link abhi uplabdh nahi hai, Refresh karein.");
     }
 }
 
@@ -1919,8 +1359,8 @@ function renderNextClassesBelowPlayer(activeKey) {
                     </div>
                 </div>
                 <div class="flex gap-2 mt-3 pt-2 border-t border-sky-100">
-                    <button onclick="playClassInRwaPlayer('${k}')" class="btn-watch flex-1 text-xs py-2">▶ Play Next</button>
-                    ${item.pdf1 ? `<button onclick="openInlinePdfForKey('${k}', 1)" class="btn-pdf1 text-xs py-2">📄 PDF</button>` : ""}
+                    <button onclick="playClassInRwaPlayer('${k}')" class="btn-watch flex-1 text-xs py-2 cursor-pointer border-0">▶ Play Next</button>
+                    ${item.pdf1 ? `<button onclick="openInlinePdfForKey('${k}', 1)" class="btn-pdf1 text-xs py-2 cursor-pointer border-0">📄 PDF</button>` : ""}
                 </div>
             </div>`;
     }).join("");
@@ -1938,14 +1378,13 @@ window.openInlinePdfForKey = function(key, num) {
     if (!u) return;
 
     state.inlinePdfUrl = u;
-    document.getElementById("inlinePdfTitle").textContent = `📄 ${info.title} (Notes PDF ${num})`;
-
+    document.getElementById("inlinePdfTitle").textContent = `📄 ${info.title} (PDF ${num})`;
     document.getElementById("nextClassesBox").classList.add("hidden");
     document.getElementById("inlinePdfBox").classList.remove("hidden");
 
     const frame = document.getElementById("inlinePdfFrame");
     if (frame) {
-        frame.src = `https://pdfweb.classx.co.in/pdfjs-latest/web/viewer.html?file=${encodeURIComponent(u)}&save_flag=0&is_encrypted=0`;
+        frame.src = `https://pdfweb.classx.co.in/pdfjs-latest/web/viewer.html?file=${encodeURIComponent(u)}&save_flag=1&is_encrypted=0`;
     }
     document.getElementById("inlinePdfBox").scrollIntoView({ behavior: "smooth" });
 };
@@ -1963,32 +1402,19 @@ function closeInlinePdfAndReset() {
     if (nextBox) nextBox.classList.remove("hidden");
 }
 
-function changeLectureQuality(qLabel) {
-    const info = state.mediaMap[state.activeKey];
-    if (info && info.qualities[qLabel]) {
-        const urlInput = document.getElementById("url");
-        urlInput.value = info.qualities[qLabel];
-        if (info.tokenObj) {
-            urlInput.dataset.token = info.tokenObj.token;
-            window.ACTIVE_PLAYER_TOKEN = info.tokenObj.token;
-        }
-        if (typeof start === "function") start();
-    }
-}
-
 // =====================================================
-// 17. TEST SERIES EXPLORER (CACHED IN PHONE MEMORY)
+// TEST SERIES EXPLORER
 // =====================================================
-async function openTestSeriesExplorer(mode, forceRefresh = false) {
+async function openTestSeriesExplorer(mode) {
     if (!enforceCompulsoryLogin()) return;
-    if (isLoaderLocked) return;
-
     state.tsMode = mode;
     state.view = "ts_list";
     showSlide("slideExplorer");
     document.getElementById("subTabs").classList.add("hidden");
 
     const grid = document.getElementById("mainGrid");
+    grid.innerHTML = `<div class="col-span-full py-12 text-center font-extrabold text-slate-800">🔄 Loading Official RWA Test Series...</div>`;
+
     const primaryTok = USER_TOKENS[0];
     state.activeTokenObj = primaryTok;
 
@@ -1996,28 +1422,13 @@ async function openTestSeriesExplorer(mode, forceRefresh = false) {
         document.getElementById("crumbText").textContent = "Official Exam Series";
         document.getElementById("headingText").textContent = "🏆 Paid Test Series";
 
-        let combined = getCachedData("paid_ts_list");
-        if (forceRefresh || !Array.isArray(combined) || combined.length === 0) {
-            if (navigator.onLine) {
-                showGlobalLoader("🏆 Loading Paid Test Series...", "Phone memory mein test series save ho rahi hain");
-                const [p0, p10, p20] = await Promise.all([
-                    fetchAPIWithCache("paid_ts_p0", `/get/test_series?start=0&search=&client_api_url=&exam_id=`, primaryTok, () => [], forceRefresh),
-                    fetchAPIWithCache("paid_ts_p10", `/get/test_series?start=10&search=&client_api_url=&exam_id=`, primaryTok, () => [], forceRefresh),
-                    fetchAPIWithCache("paid_ts_p20", `/get/test_series?start=20&search=&client_api_url=&exam_id=`, primaryTok, () => [], forceRefresh)
-                ]);
-                hideGlobalLoader();
-                combined = [
-                    ...(Array.isArray(p0) ? p0 : []),
-                    ...(Array.isArray(p10) ? p10 : []),
-                    ...(Array.isArray(p20) ? p20 : []),
-                    ...DB.paidTestSeries
-                ];
-                setCachedData("paid_ts_list", combined);
-            } else {
-                combined = DB.paidTestSeries;
-            }
-        }
+        const [p0, p10, p20] = await Promise.all([
+            fetchAPIWithToken(`/get/test_series?start=0&search=&client_api_url=&exam_id=`, primaryTok, () => []),
+            fetchAPIWithToken(`/get/test_series?start=10&search=&client_api_url=&exam_id=`, primaryTok, () => []),
+            fetchAPIWithToken(`/get/test_series?start=20&search=&client_api_url=&exam_id=`, primaryTok, () => [])
+        ]);
 
+        let combined = [...(Array.isArray(p0) ? p0 : []), ...(Array.isArray(p10) ? p10 : []), ...(Array.isArray(p20) ? p20 : []), ...DB.paidTestSeries];
         const seen = new Set();
         grid.innerHTML = "";
         combined.forEach(ts => {
@@ -2043,28 +1454,13 @@ async function openTestSeriesExplorer(mode, forceRefresh = false) {
         document.getElementById("crumbText").textContent = "Weekly Mock Tests";
         document.getElementById("headingText").textContent = "📝 Free Test Series";
 
-        let combined = getCachedData("free_ts_list");
-        if (forceRefresh || !Array.isArray(combined) || combined.length === 0) {
-            if (navigator.onLine) {
-                showGlobalLoader("📝 Loading Free Test Series...", "Phone memory mein free tests save ho rahe hain");
-                const [f0, f10, f20] = await Promise.all([
-                    fetchAPIWithCache("free_ts_p0", `/get/quiz_test_series?start=0&exam_id=`, primaryTok, () => [], forceRefresh),
-                    fetchAPIWithCache("free_ts_p10", `/get/quiz_test_series?start=10&exam_id=`, primaryTok, () => [], forceRefresh),
-                    fetchAPIWithCache("free_ts_p20", `/get/quiz_test_series?start=20&exam_id=`, primaryTok, () => [], forceRefresh)
-                ]);
-                hideGlobalLoader();
-                combined = [
-                    ...(Array.isArray(f0) ? f0 : []),
-                    ...(Array.isArray(f10) ? f10 : []),
-                    ...(Array.isArray(f20) ? f20 : []),
-                    ...DB.freeTestSeries
-                ];
-                setCachedData("free_ts_list", combined);
-            } else {
-                combined = DB.freeTestSeries;
-            }
-        }
+        const [f0, f10, f20] = await Promise.all([
+            fetchAPIWithToken(`/get/quiz_test_series?start=0&exam_id=`, primaryTok, () => []),
+            fetchAPIWithToken(`/get/quiz_test_series?start=10&exam_id=`, primaryTok, () => []),
+            fetchAPIWithToken(`/get/quiz_test_series?start=20&exam_id=`, primaryTok, () => [])
+        ]);
 
+        let combined = [...(Array.isArray(f0) ? f0 : []), ...(Array.isArray(f10) ? f10 : []), ...(Array.isArray(f20) ? f20 : []), ...DB.freeTestSeries];
         const seen = new Set();
         grid.innerHTML = "";
         combined.forEach(ts => {
@@ -2089,28 +1485,22 @@ async function openTestSeriesExplorer(mode, forceRefresh = false) {
     }
 }
 
-async function openTestSeriesSubjects(tsId, tsTitle, forceRefresh = false) {
+async function openTestSeriesSubjects(tsId, tsTitle) {
     state.activeSeriesId = tsId;
     state.activeSeriesTitle = tsTitle;
     state.view = "ts_subjects";
     document.getElementById("crumbText").textContent = `Test Series #${tsId}`;
     document.getElementById("headingText").textContent = tsTitle;
-    pushAppHistoryState("ts_subs_" + tsId);
 
     const grid = document.getElementById("mainGrid");
     grid.innerHTML = `<div class="col-span-full py-10 text-center font-bold text-slate-700">Loading Test Series Subjects...</div>`;
 
     const useTok = state.activeTokenObj || USER_TOKENS[0];
-    const subs = await fetchAPIWithCache(
-        `ts_subs_${tsId}`,
-        `/get/testseries_subjects?testseries_id=${tsId}`,
-        useTok,
-        () => DB.tsSubjects[tsId] || [],
-        forceRefresh
-    );
+    fetchRawJSONWithToken(`/Test_Series/test_series_by_id?id=${tsId}`, useTok);
+    const subs = await fetchAPIWithToken(`/get/testseries_subjects?testseries_id=${tsId}`, useTok, () => DB.tsSubjects[tsId] || []);
 
     if (!subs || subs.length === 0 || (subs.length === 1 && String(subs[0].subjectid) === "-1")) {
-        openTestSeriesTitles(tsId, "-1", tsTitle, forceRefresh);
+        openTestSeriesTitles(tsId, "-1", tsTitle);
         return;
     }
 
@@ -2130,7 +1520,7 @@ async function openTestSeriesSubjects(tsId, tsTitle, forceRefresh = false) {
     });
 }
 
-async function openTestSeriesTitles(tsId, subId, subName, forceRefresh = false) {
+async function openTestSeriesTitles(tsId, subId, subName) {
     state.view = "ts_tests";
     state.activeSeriesId = tsId;
     state.activeTsSubId = String(subId);
@@ -2138,31 +1528,20 @@ async function openTestSeriesTitles(tsId, subId, subName, forceRefresh = false) 
 
     document.getElementById("crumbText").textContent = state.activeSeriesTitle;
     document.getElementById("headingText").textContent = `📝 ${subName}`;
-    pushAppHistoryState(`ts_titles_${tsId}_${subId}`);
 
     const grid = document.getElementById("mainGrid");
     grid.innerHTML = `<div class="col-span-full py-10 text-center font-bold text-slate-700">Fetching Mock Tests...</div>`;
 
     const useTok = state.activeTokenObj || USER_TOKENS[0];
     const uid = useTok.userId || extractUidFromJwt(useTok.token) || "4756316";
-    const ep = `/get/test_titlev2?testseriesid=${tsId}&subject_id=${subId}&chapter_id=-1&userid=${uid}&search=&start=-1`;
+    const ep = String(subId) === "-1"
+        ? `/get/test_titlev2?testseriesid=${tsId}&subject_id=-1&chapter_id=-1&userid=${uid}&search=&start=-1`
+        : `/get/test_titlev2?testseriesid=${tsId}&subject_id=${subId}&chapter_id=-1&userid=${uid}&search=&start=-1`;
 
-    let list = await fetchAPIWithCache(
-        `ts_titles_${tsId}_${subId}`,
-        ep,
-        useTok,
-        () => DB.tsTitles[`${tsId}_${subId}`] || [],
-        forceRefresh
-    );
+    let list = await fetchAPIWithToken(ep, useTok, () => DB.tsTitles[`${tsId}_${subId}`] || []);
     if ((!list || list.length === 0) && String(subId) !== "-1") {
         const epAlt = `/get/test_titlev2?testseriesid=${tsId}&subject_id=${subId}&userid=${uid}&search=&start=-1`;
-        list = await fetchAPIWithCache(
-            `ts_titles_alt_${tsId}_${subId}`,
-            epAlt,
-            useTok,
-            () => DB.tsTitles[`${tsId}_${subId}`] || DB.tsTitles["716_-1"] || [],
-            forceRefresh
-        );
+        list = await fetchAPIWithToken(epAlt, useTok, () => DB.tsTitles[`${tsId}_${subId}`] || DB.tsTitles["743_-1"] || []);
     }
     renderTestTitlesGrid(list, tsId, useTok);
 }
@@ -2172,7 +1551,7 @@ function formatCardTimeLabel(rawTime) {
     if (str.includes("+")) {
         const parts = str.split("+").map(n => parseInt(n.trim()) || 0);
         const sum = parts.reduce((a, b) => a + b, 0);
-        return `${sum} Mins`;
+        return `${sum} Mins (Sec)`;
     }
     return `${str} Mins`;
 }
@@ -2198,6 +1577,9 @@ function renderTestTitlesGrid(list, tsId, boundTok) {
         };
 
         const timeLabel = formatCardTimeLabel(t.time);
+        const isSectional = String(t.time || "").includes("+") || String(t.restrict_part_switching) === "1";
+        const hasOptional = String(t.show_sectionselector) === "1";
+
         grid.innerHTML += `
             <div class="grid-card p-5 flex flex-col justify-between">
                 <div>
@@ -2207,13 +1589,15 @@ function renderTestTitlesGrid(list, tsId, boundTok) {
                     </div>
                     <h4 class="font-black text-base text-slate-900 mt-2">${t.title}</h4>
                     <div class="flex gap-2.5 mt-2 text-xs font-bold text-slate-600 flex-wrap">
-                        <span>❓ ${t.questions || 80} Qs</span>
-                        <span>🏆 ${t.marks || 160} Marks</span>
+                        <span>❓ ${t.questions || 50} Qs</span>
+                        <span>🏆 ${t.marks || 100} Marks</span>
+                        ${isSectional ? `<span class="text-rose-600">🔒 Sectional</span>` : ""}
+                        ${hasOptional ? `<span class="text-amber-700">📝 Optional Sub</span>` : ""}
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-2 mt-4 pt-3 border-t border-sky-100">
-                    <button onclick="launchCbtTest('${tKey}')" class="btn-watch flex-1 text-xs">🚀 Attempt Live Test</button>
-                    ${pdfUrl ? `<button onclick="openTestPdf('${tKey}')" class="btn-pdf1 text-xs">📄 Test PDF</button>` : ""}
+                    <button onclick="launchCbtTest('${tKey}')" class="btn-watch flex-1 text-xs cursor-pointer border-0">🚀 Attempt Live Test</button>
+                    ${pdfUrl ? `<button onclick="openTestPdf('${tKey}')" class="btn-pdf1 text-xs cursor-pointer border-0">📄 Test PDF</button>` : ""}
                 </div>
             </div>`;
     });
@@ -2227,15 +1611,14 @@ function openTestPdf(tKey) {
     showSlide("slidePdf");
     const frame = document.getElementById("pdfFrame");
     if (frame) {
-        frame.src = `https://pdfweb.classx.co.in/pdfjs-latest/web/viewer.html?file=${encodeURIComponent(t.resolvedPdf)}&save_flag=0&is_encrypted=0`;
+        frame.src = `https://pdfweb.classx.co.in/pdfjs-latest/web/viewer.html?file=${encodeURIComponent(t.resolvedPdf)}&save_flag=1&is_encrypted=0`;
     }
 }
 
 // =====================================================
-// 18. DELEGATE TEST LAUNCH TO TCS ENGINE
+// TCS CBT LAUNCH DELEGATE
 // =====================================================
 async function launchCbtTest(tKey) {
-    if (isLoaderLocked) return;
     if (typeof window.launchTcsCbtEngine === "function") {
         await window.launchTcsCbtEngine(tKey);
     }
@@ -2251,13 +1634,11 @@ function exitCbtTest() {
     if (typeof window.exitTcsTest === "function") {
         window.exitTcsTest();
     } else {
+        if (state.cbtTimerId) clearInterval(state.cbtTimerId);
         showSlide("slideExplorer");
     }
 }
 
-// =====================================================
-// 19. CLEAN PDF SLIDE VIEWER (NO EXTRA BUTTONS / NO URL)
-// =====================================================
 function openPdf(key, num) {
     const info = state.mediaMap[key];
     if (!info) return;
@@ -2268,23 +1649,21 @@ function openPdf(key, num) {
     if (vid && !vid.paused) vid.pause();
 
     state.currentPdfUrl = u;
-    document.getElementById("pdfTitle").textContent = `📄 ${info.title} (Notes PDF ${num})`;
+    document.getElementById("pdfTitle").textContent = `📄 ${info.title} (PDF ${num})`;
     showSlide("slidePdf");
-
     const frame = document.getElementById("pdfFrame");
     if (frame) {
-        frame.src = `https://pdfweb.classx.co.in/pdfjs-latest/web/viewer.html?file=${encodeURIComponent(u)}&save_flag=0&is_encrypted=0`;
+        frame.src = `https://pdfweb.classx.co.in/pdfjs-latest/web/viewer.html?file=${encodeURIComponent(u)}&save_flag=1&is_encrypted=0`;
     }
 }
 
 function closePdfSlide() {
-    const frame = document.getElementById("pdfFrame");
-    if (frame) frame.src = "";
-    showSlide(state.previousSlide || "slideExplorer", true);
+    document.getElementById("pdfFrame").src = "";
+    showSlide(state.previousSlide || "slideExplorer");
 }
 
 // =====================================================
-// 20. USER PERSONAL TOKEN LIST (CUSTOM POPUP)
+// PERSONAL TOKEN MANAGER
 // =====================================================
 function renderTokenManagerList() {
     const container = document.getElementById("tokenListContainer");
@@ -2309,8 +1688,8 @@ function renderTokenManagerList() {
                     <p class="text-[11px] font-mono text-slate-600 mt-1 truncate">${shortTok}</p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button onclick="copyTokenClean('${t.token}')" class="btn-nav bg-sky-600 text-white border-0 text-xs">📋 Copy</button>
-                    ${USER_TOKENS.length > 1 ? `<button onclick="deleteToken('${t.id}')" class="btn-nav bg-rose-600 text-white border-0 text-xs">🗑 Delete</button>` : `<span class="text-[11px] font-bold text-emerald-600">● Primary</span>`}
+                    <button onclick="navigator.clipboard.writeText('${t.token}'); showCustomAlert('Token Copied!');" class="btn-nav bg-sky-600 text-white border-0 text-xs cursor-pointer">📋 Copy</button>
+                    ${USER_TOKENS.length > 1 ? `<button onclick="deleteToken('${t.id}')" class="btn-nav bg-rose-600 text-white border-0 text-xs cursor-pointer">🗑 Delete</button>` : `<span class="text-[11px] font-bold text-emerald-600">● Primary</span>`}
                 </div>
             </div>`;
     });
@@ -2318,29 +1697,28 @@ function renderTokenManagerList() {
 }
 
 async function addNewToken() {
-    if (isLoaderLocked) return;
     const labelInput = document.getElementById("newTokLabel").value.trim();
     const uidInput = document.getElementById("newTokUid").value.trim();
     let token = document.getElementById("newTokValue").value.trim();
 
     if (!token) {
-        showAppAlert("Kripya apna JWT Token paste karein.", "Token Required", "🔑");
+        showCustomAlert("Kripya JWT Token paste karein.");
         return;
     }
     token = token.replace(/^["']|["']$/g, "").replace(/^Authorization:\s*/i, "").trim();
 
     const userId = uidInput || extractUidFromJwt(token);
     if (!userId) {
-        showAppAlert("Invalid Token format! Kripya sahi JWT token dalein.", "Invalid Format", "❌");
+        showCustomAlert("Invalid JWT Token format!");
         return;
     }
 
-    showGlobalLoader("🔑 Verifying Token...", "Server se aapka token check kiya ja raha hai");
+    showGlobalLoader("Token Verify ho raha hai...");
     const verifiedUser = await fetchUserDetailsFromServer(token, userId);
     hideGlobalLoader();
 
     if (!verifiedUser) {
-        showAppAlert("Token verification failed! Yeh token expired ya invalid hai.", "Verification Failed", "❌");
+        showCustomAlert("Server verification failed! Yeh token expired ya invalid hai.");
         return;
     }
 
@@ -2363,22 +1741,14 @@ async function addNewToken() {
     document.getElementById("newTokUid").value = "";
     document.getElementById("newTokValue").value = "";
     renderTokenManagerList();
-    showToast(`✅ Token Saved for ${verifiedUser.name || "Student"}!`);
+    showCustomAlert(`✅ Token Verified & Added for ${verifiedUser.name || "User"}!`);
 }
 
 function deleteToken(id) {
     if (USER_TOKENS.length <= 1) return;
-    showAppConfirm(
-        "Kya aap is extra token ko hatana chahte hain?",
-        () => {
-            USER_TOKENS = USER_TOKENS.filter(t => t.id !== id);
-            localStorage.setItem("rwa_user_tokens_v2", JSON.stringify(USER_TOKENS));
-            renderTokenManagerList();
-            showToast("🗑 Token Removed");
-        },
-        "Remove Token",
-        "🗑"
-    );
+    USER_TOKENS = USER_TOKENS.filter(t => t.id !== id);
+    localStorage.setItem("rwa_user_tokens_v2", JSON.stringify(USER_TOKENS));
+    renderTokenManagerList();
 }
 
 function filterGrid() {
@@ -2388,16 +1758,11 @@ function filterGrid() {
     });
 }
 
-// =====================================================
-// 21. APP INITIALIZATION ON STARTUP
-// =====================================================
+// Initialization check
 updateTokenBadge();
-pushAppHistoryState("home_root");
-
 if (isUserLoggedIn()) {
-    showSlide("slideHome", true);
+    showSlide("slideHome");
 } else {
     openLoginModal();
 }
-
 processPendingBotSync();
