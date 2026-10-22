@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-    <title>RWA Sky Pro App</title>
+    <title>RWA Sky Pro Portal - Courses, Player & Live TCS CBT Test Series</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
@@ -33,48 +33,30 @@
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col select-none">
+<body class="min-h-screen flex flex-col">
 
-    <!-- GLOBAL ANTI-SPAM CRASH-PROOF LOADING OVERLAY -->
-    <div id="globalLoaderOverlay" class="global-loader-overlay hidden">
-        <div class="global-loader-card">
-            <div class="loader-ring-pro"></div>
-            <h4 id="globalLoaderTitle" class="font-black text-base text-slate-900 mt-3">Please Wait...</h4>
-            <p id="globalLoaderSub" class="text-xs font-bold text-slate-500 mt-1">Data load ho raha hai, kripya pratiksha karein</p>
-        </div>
+    <!-- OFFLINE / SLOW NETWORK WARNING BANNER -->
+    <div id="netStatusBanner" class="fixed top-0 left-0 right-0 bg-rose-600 text-white text-center py-2 px-4 text-xs font-black z-[100000] hidden shadow-lg">
+        ⚠️ Internet connection slow ya band hai! Kripya apna Mobile Net ya Wi-Fi check karein.
     </div>
 
-    <!-- OFFLINE / SLOW INTERNET CUSTOM POPUP (NO URL SHOWN EVER) -->
-    <div id="networkErrorModal" class="fixed inset-0 bg-slate-900/85 backdrop-blur-md z-[100005] flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl border-2 border-amber-400 animate-slideInSmooth">
-            <div class="w-16 h-16 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center text-3xl mx-auto shadow-inner">📡</div>
-            <h3 id="netModalTitle" class="font-black text-lg text-slate-900 mt-3">Internet Connection Band Ya Slow Hai!</h3>
-            <p id="netModalDesc" class="text-xs font-bold text-slate-600 mt-2 leading-relaxed">
-                Kripya apna Mobile Data ya Wi-Fi connection check karein. High-speed internet ya Wi-Fi ka upyog karein aur dubara koshish karein.
-            </p>
-            <div class="flex gap-2.5 mt-5">
-                <button onclick="closeNetworkModal()" class="flex-1 py-2.5 px-4 rounded-xl bg-slate-100 text-slate-700 font-extrabold text-xs border-0 cursor-pointer">Close</button>
-                <button onclick="retryNetworkAction()" class="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold text-xs border-0 shadow-md cursor-pointer">🔄 Retry Now</button>
+    <!-- GLOBAL LOADING OVERLAY (CRASH PROOF SPAM PREVENTION) -->
+    <div id="globalLoader" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[99998] flex flex-col items-center justify-center p-4 hidden">
+        <div class="spinner-ring mb-3"></div>
+        <div id="globalLoaderText" class="text-white font-extrabold text-sm tracking-wide">Data Load ho raha hai, kripya wait karein...</div>
+    </div>
+
+    <!-- CUSTOM ALERT / CONFIRM MODAL (NO URL DISPLAY) -->
+    <div id="customAlertModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[99999] flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border-2 border-sky-300 text-center animate-slideInSmooth">
+            <div id="customAlertIcon" class="w-12 h-12 rounded-2xl bg-sky-500 text-white font-black text-xl flex items-center justify-center mx-auto mb-3 shadow">ℹ</div>
+            <h4 id="customAlertTitle" class="font-black text-lg text-slate-900 mb-1">RWA Portal Notice</h4>
+            <p id="customAlertMsg" class="text-xs font-bold text-slate-600 mb-5 whitespace-pre-line"></p>
+            <div id="customAlertButtons" class="flex gap-2 justify-center">
+                <button id="customAlertOkBtn" onclick="closeCustomAlert(true)" class="btn-watch px-6 py-2.5 text-xs shadow cursor-pointer border-0">OK</button>
+                <button id="customAlertCancelBtn" onclick="closeCustomAlert(false)" class="btn-nav bg-slate-200 text-slate-800 border-0 px-5 py-2.5 text-xs hidden cursor-pointer">Cancel</button>
             </div>
         </div>
-    </div>
-
-    <!-- CUSTOM APP POPUP MODAL (REPLACES BROWSER ALERT/CONFIRM - NEVER SHOWS LINK) -->
-    <div id="customDialogModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100006] flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl border-2 border-sky-300 animate-slideInSmooth">
-            <div id="customDialogIcon" class="w-14 h-14 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center text-2xl mx-auto font-black">🔔</div>
-            <h3 id="customDialogTitle" class="font-black text-lg text-slate-900 mt-3">RWA Sky Portal</h3>
-            <p id="customDialogMsg" class="text-xs font-bold text-slate-600 mt-2 leading-relaxed">Message</p>
-            <div id="customDialogBtns" class="flex gap-2.5 mt-5 justify-center">
-                <button id="customDialogCancelBtn" class="flex-1 py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs border-0 cursor-pointer">Cancel</button>
-                <button id="customDialogOkBtn" class="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold text-xs border-0 shadow-md cursor-pointer">OK</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- CUSTOM TOAST NOTIFICATION -->
-    <div id="customToastBox" class="custom-toast-box hidden">
-        <span id="customToastText">✅ Updated!</span>
     </div>
 
     <!-- TOP HEADER NAVIGATION -->
@@ -84,12 +66,12 @@
                 <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-sky-500/30">R</div>
                 <div>
                     <div class="font-extrabold text-lg leading-none text-slate-900 tracking-tight">RWA SKY PORTAL</div>
-                    <div id="apiStatus" class="text-[11px] font-bold text-emerald-600 mt-0.5">● Memory Cache Ready</div>
+                    <div id="apiStatus" class="text-[11px] font-bold text-emerald-600 mt-0.5">● Live Server Connected</div>
                 </div>
             </div>
 
             <div class="flex items-center gap-2 flex-wrap">
-                <button onclick="forceRefreshAllData()" class="btn-nav bg-sky-600 text-white border-0" title="Naya Data Load Karein">🔄 Refresh</button>
+                <button onclick="triggerPortalRefresh()" class="btn-nav bg-slate-900 text-white border-0" title="Refresh Portal Data">🔄 Refresh</button>
                 <button onclick="openTestSeriesExplorer('paid_ts')" class="btn-nav bg-indigo-600 text-white border-0">🏆 Paid Tests</button>
                 <button onclick="openTestSeriesExplorer('free_ts')" class="btn-nav bg-teal-600 text-white border-0">📝 Free Tests</button>
                 <button onclick="openTokenSlide()" class="btn-nav bg-amber-500 text-white border-0">🔑 My Token (<span id="tokCountBadge">1</span>)</button>
@@ -112,13 +94,13 @@
             <div class="text-center max-w-2xl mx-auto mb-8 mt-2">
                 <span class="px-3.5 py-1 rounded-full bg-white/80 text-sky-900 font-extrabold text-xs uppercase tracking-wider shadow-sm">RWA All-In-One Cloud Portal</span>
                 <h1 class="text-3xl sm:text-4xl font-black text-slate-900 mt-2">Select Your Study Zone</h1>
-                <p class="text-slate-700 text-sm font-medium mt-1">Paid Batches, Free Classes, Official Paid/Free Test Series aur Fast Offline Memory Cache.</p>
+                <p class="text-slate-700 text-sm font-medium mt-1">Paid Batches, Free Classes, Official Paid/Free Test Series aur Multi-Token Sync.</p>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
                 <div onclick="openExplorerSlide('paid')" class="hub-card hub-paid cursor-pointer">
                     <div class="hub-icon">🎓</div>
-                    <span class="hub-badge">INSTANT MEMORY CACHE</span>
+                    <span class="hub-badge">ALL TOKENS MERGED</span>
                     <h2 class="text-2xl font-black mt-2">Paid Batches</h2>
                     <p class="text-sm opacity-95 mt-1">Sabhi added tokens ke Purchased Batches, Live Classes, PDFs aur Batch Tests.</p>
                     <div class="hub-btn mt-5">Open Paid Batches ➔</div>
@@ -165,7 +147,6 @@
                     <div class="flex items-center gap-2 flex-wrap">
                         <button onclick="goHomeHub()" class="btn-nav bg-slate-900 text-white border-0 text-xs">🏠 Home</button>
                         <button onclick="handleGlobalBack()" class="btn-nav bg-sky-600 text-white border-0 text-xs">⬅ Back</button>
-                        <button onclick="forceRefreshCurrentView()" class="btn-nav bg-emerald-600 text-white border-0 text-xs">🔄 Refresh</button>
                         <span id="crumbText" class="px-3 py-1 rounded-full bg-sky-200 text-sky-950 font-extrabold text-[11px] uppercase">Explorer</span>
                     </div>
                     <h2 id="headingText" class="text-2xl sm:text-3xl font-black text-slate-900 mt-2">All Batches</h2>
@@ -186,7 +167,7 @@
             <div id="mainGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
         </section>
 
-        <!-- SLIDE 3: PLAYER SECTION (DOWNLOAD BUTTON REMOVED) -->
+        <!-- SLIDE 3: PLAYER SECTION -->
         <section id="slidePlayer" class="slide-page hidden-slide">
             <div class="player-sky-card max-w-5xl mx-auto">
                 <div id="playerHeaderBar" class="flex flex-wrap justify-between items-center gap-3 pb-3 mb-3 border-b-2 border-sky-300/70">
@@ -233,7 +214,7 @@
                             </div>
                         </div>
 
-                        <!-- Transparent Overlay Controls (Download Button Removed) -->
+                        <!-- Transparent Overlay Controls (Download Button Removed as requested) -->
                         <div id="playerControlsBar" class="controls">
                             <div class="seek-row">
                                 <input id="seek" class="seek" type="range" min="0" max="1000" value="0">
@@ -277,15 +258,14 @@
                     <div id="nextClassesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
                 </div>
 
-                <!-- INLINE PDF VIEWER (APPX, GOOGLE VIEWER & DOWNLOAD BUTTONS REMOVED) -->
                 <div id="inlinePdfBox" class="sky-card p-4 hidden">
                     <div class="flex flex-wrap justify-between items-center gap-2 mb-3 pb-2 border-b border-sky-200">
                         <div class="flex items-center gap-2 min-w-0">
-                            <button onclick="switchBottomToNextClasses()" class="btn-nav bg-slate-900 text-white border-0 text-xs shrink-0">⏭️ Back to Next Classes</button>
+                            <button onclick="switchBottomToNextClasses()" class="btn-nav bg-slate-900 text-white border-0 text-xs shrink-0 cursor-pointer">⏭️ Back</button>
                             <h4 id="inlinePdfTitle" class="font-extrabold text-slate-900 text-sm truncate">📄 Class Notes PDF</h4>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button onclick="switchBottomToNextClasses()" class="btn-nav bg-rose-600 text-white border-0 text-xs">✖ Close PDF</button>
+                            <button onclick="switchBottomToNextClasses()" class="btn-nav bg-rose-600 text-white border-0 text-xs cursor-pointer">✖ Close PDF</button>
                         </div>
                     </div>
                     <iframe id="inlinePdfFrame" class="w-full h-[75vh] bg-slate-900 rounded-2xl border-2 border-sky-300" src="" frameborder="0"></iframe>
@@ -300,22 +280,24 @@
                 <!-- STEP 1: START & SUBJECT SELECTION SCREEN -->
                 <div id="start-screen" class="tcs-step-page">
                     <div class="start-card">
-                        <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-3">
-                            <button onclick="exitCbtTest()" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs border-0 cursor-pointer">⬅ Back</button>
+                        <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                            <button onclick="exitCbtTest()" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs border-0 cursor-pointer">⬅ Back to Tests</button>
                             <span id="tcs-series-tag" class="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-900 text-[11px] font-extrabold uppercase">TCS CBT PATTERN</span>
                         </div>
 
                         <h2 id="tcs-start-title" style="color: #1a237e; border-bottom: 1px solid #eee; padding-bottom: 12px; margin-bottom: 14px;">(TCS Pattern) Mock Test</h2>
                         
+                        <!-- Dynamic Compulsory + Optional Subject Cards -->
                         <div id="subjects-selection-container"></div>
                         
+                        <!-- Deep Parsed Test Metadata Box -->
                         <div class="stats-box">
                             <div class="start-info"><span>Total Questions:</span> <span id="stat-qs">--</span></div>
                             <div class="start-info"><span>Total Time:</span> <span id="stat-time">--</span></div>
                             <div class="start-info"><span>Maximum Marks:</span> <span id="stat-marks">--</span></div>
                         </div>
                         
-                        <button id="tcs-start-btn" class="start-btn" onclick="startTest()">Start Test</button>
+                        <button id="tcs-start-btn" class="start-btn" onclick="startTest()">Start Test ➔</button>
                     </div>
                 </div>
 
@@ -335,29 +317,33 @@
                         </div>
                     </div>
                     
+                    <!-- Horizontal Section Tabs -->
                     <div class="tcs-tabs-wrapper" id="tcs-tabs-container"></div>
 
+                    <!-- Question Number, Per-Question Timer & Marking Bar -->
                     <div class="tcs-q-info-bar">
                         <div style="display: flex; align-items: center;">
                             <div class="tcs-q-badge" id="tcs-q-num">1</div>
                             <span id="tcs-q-time" style="color: #666; font-weight: 600;">00:00</span>
                         </div>
                         <div class="tcs-marks">
-                            <span class="tcs-m-pos" id="tcs-live-pos">+2</span>
+                            <span class="tcs-m-pos" id="tcs-live-pos">+2.00</span>
                             <span class="tcs-m-neg" id="tcs-live-neg">-0.25</span>
                             <span style="color:#f59e0b;">⚠️</span>
                         </div>
                     </div>
 
+                    <!-- Main Question & Options Scrollable Area -->
                     <div class="tcs-question-area" id="tcs-question-scroll-box">
                         <div class="tcs-q-text" id="tcs-q-text">Loading...</div>
                         <div id="tcs-options-container"></div>
                     </div>
                     
+                    <!-- Fixed Bottom Navigation & Actions Footer -->
                     <div class="tcs-footer">
                         <div class="tcs-arrows">
                             <button class="tcs-arrow-btn" onclick="prevQuestion()">❮</button>
-                            <span id="tcs-footer-sec-info" class="text-xs font-bold text-slate-500 self-center"></span>
+                            <span id="tcs-footer-sec-info" class="text-xs font-bold text-slate-500 self-center">Section 1</span>
                             <button class="tcs-arrow-btn" onclick="nextQuestion()">❯</button>
                         </div>
                         <div class="tcs-actions-row">
@@ -368,6 +354,7 @@
                         </div>
                     </div>
 
+                    <!-- Slide-Over Question Palette Drawer -->
                     <div class="tcs-drawer-overlay" id="tcs-palette" onclick="if(event.target === this) toggleTcsPalette()">
                         <div class="tcs-drawer">
                             <div class="tcs-dr-header">
@@ -523,9 +510,9 @@
                     <div>
                         <span class="text-xs font-extrabold text-amber-600 uppercase">Personal Account Token</span>
                         <h2 class="text-2xl font-black text-slate-900">🔑 My Active Login Token</h2>
-                        <p class="text-xs text-slate-600 mt-0.5">Yahan sirf aapka khud ka login kiya gaya token dikhta hai.</p>
+                        <p class="text-xs text-slate-600 mt-0.5">Yahan sirf aapka khud ka login kiya gaya token dikhta hai. Aap chahein toh apna extra personal token bhi add kar sakte hain.</p>
                     </div>
-                    <button onclick="goHomeHub()" class="btn-nav bg-slate-900 text-white border-0">🏠 Home</button>
+                    <button onclick="goHomeHub()" class="btn-nav bg-slate-900 text-white border-0 cursor-pointer">🏠 Home</button>
                 </div>
 
                 <div class="bg-sky-50 border-2 border-sky-200 rounded-2xl p-4 mb-6">
@@ -554,13 +541,13 @@
             </div>
         </section>
 
-        <!-- SLIDE 6: PDF VIEWER (APPX, GOOGLE VIEWER & DOWNLOAD BUTTONS REMOVED) -->
+        <!-- SLIDE 6: PDF VIEWER (Clean embedded viewer without AppX/Google buttons) -->
         <section id="slidePdf" class="slide-page hidden-slide">
             <div class="sky-card p-4">
                 <div class="flex flex-wrap justify-between items-center gap-2 mb-3 pb-2 border-b border-sky-200">
                     <h3 id="pdfTitle" class="font-extrabold text-slate-900 text-sm sm:text-base truncate">📄 PDF Document</h3>
                     <div class="flex items-center gap-2">
-                        <button onclick="closePdfSlide()" class="btn-nav bg-rose-600 text-white border-0 text-xs">✖ Close PDF</button>
+                        <button onclick="closePdfSlide()" class="btn-nav bg-rose-600 text-white border-0 text-xs cursor-pointer">✖ Close PDF</button>
                     </div>
                 </div>
                 <iframe id="pdfFrame" class="w-full h-[82vh] bg-slate-900 rounded-2xl border-2 border-sky-300" src="" frameborder="0"></iframe>
@@ -577,19 +564,22 @@
                     <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white font-black text-base shadow">🔐</div>
                     <div>
                         <h3 class="font-black text-lg text-slate-900 leading-none">RWA Official Login</h3>
-                        <p class="text-[11px] font-bold text-emerald-600 mt-0.5">● One-Time Login (Auto-Saved in App)</p>
+                        <p class="text-[11px] font-bold text-rose-600 mt-0.5">● Login Compulsory to Access Portal</p>
                     </div>
                 </div>
-                <button id="closeLoginModalBtn" onclick="closeLoginModal()" class="text-slate-400 hover:text-slate-700 font-black text-lg hidden">✕</button>
+                <button id="closeLoginModalBtn" onclick="closeLoginModal()" class="text-slate-400 hover:text-slate-700 font-black text-lg hidden cursor-pointer bg-transparent border-0">✕</button>
             </div>
 
+            <!-- 2 Login Option Tabs -->
             <div class="grid grid-cols-2 gap-2 bg-sky-50 p-1.5 rounded-2xl border border-sky-200 mb-4">
                 <button id="tabBtnCreds" onclick="switchLoginMode('creds')" class="py-2 px-3 rounded-xl font-extrabold text-xs bg-blue-600 text-white shadow transition-all cursor-pointer border-0">📱 Number & Password</button>
                 <button id="tabBtnToken" onclick="switchLoginMode('token')" class="py-2 px-3 rounded-xl font-extrabold text-xs text-slate-700 bg-transparent hover:bg-sky-100 transition-all cursor-pointer border-0">🔑 Direct Token</button>
             </div>
 
+            <!-- Status / Error Alert Box -->
             <div id="loginStatusAlert" class="hidden mb-3 p-3 rounded-xl text-xs font-extrabold"></div>
 
+            <!-- OPTION 1: Phone/Email + Password -->
             <div id="loginBoxCreds" class="space-y-3.5">
                 <div>
                     <label class="text-xs font-extrabold text-slate-700">Phone Number / Email</label>
@@ -599,16 +589,17 @@
                     <label class="text-xs font-extrabold text-slate-700">Password</label>
                     <input id="loginPassInput" type="password" placeholder="Enter your RWA password" class="w-full bg-slate-50 border-2 border-sky-200 rounded-xl p-3 text-xs text-slate-900 font-semibold mt-1 outline-none focus:border-blue-600">
                 </div>
-                <button id="btnSubmitCreds" onclick="submitUserLogin('creds')" class="w-full btn-watch py-3 text-sm shadow-lg">Login & Save Account ➔</button>
+                <button id="btnSubmitCreds" onclick="submitUserLogin('creds')" class="w-full btn-watch py-3 text-sm shadow-lg cursor-pointer border-0">Login with Password ➔</button>
             </div>
 
+            <!-- OPTION 2: Direct JWT Token -->
             <div id="loginBoxToken" class="space-y-3.5 hidden">
                 <div>
                     <label class="text-xs font-extrabold text-slate-700">Paste Direct JWT Authorization Token</label>
                     <textarea id="loginTokenInput" rows="4" placeholder="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." class="w-full bg-slate-50 border-2 border-sky-200 rounded-xl p-3 text-xs text-slate-900 font-mono mt-1 outline-none focus:border-blue-600"></textarea>
                 </div>
-                <p class="text-[11px] text-slate-500 font-medium">Token dalte hi aapka login phone memory mein save ho jayega.</p>
-                <button id="btnSubmitToken" onclick="submitUserLogin('token')" class="w-full btn-watch py-3 text-sm shadow-lg">Verify Token & Save ➔</button>
+                <p class="text-[11px] text-slate-500 font-medium">Token dalte hi server se verify hokar aapki sabhi profile details aur batches auto-fetch ho jayenge.</p>
+                <button id="btnSubmitToken" onclick="submitUserLogin('token')" class="w-full btn-watch py-3 text-sm shadow-lg cursor-pointer border-0">Verify Token & Login ➔</button>
             </div>
         </div>
     </div>
@@ -625,8 +616,8 @@
             </div>
             <div id="profileDetailsContent" class="space-y-3 text-sm text-slate-700"></div>
             <div class="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center">
-                <button onclick="handleLogout()" class="btn-nav bg-rose-600 text-white border-0">🚪 Logout Account</button>
-                <button onclick="closeProfileModal()" class="btn-nav bg-slate-900 text-white border-0">Close</button>
+                <button onclick="handleLogout()" class="btn-nav bg-rose-600 text-white border-0 cursor-pointer">🚪 Logout Account</button>
+                <button onclick="closeProfileModal()" class="btn-nav bg-slate-900 text-white border-0 cursor-pointer">Close</button>
             </div>
         </div>
     </div>
